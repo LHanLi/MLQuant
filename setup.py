@@ -19,4 +19,4 @@ setup(
 )
 
 # python setup.py install --u
-# python setup.py install develop
+# python setup.py develop
