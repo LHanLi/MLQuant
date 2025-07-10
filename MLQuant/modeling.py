@@ -23,9 +23,9 @@ class Modeling():
     def run(self): 
         log("开始Modeling") 
         # 1. 生成滑动训练/测试窗口;
-        self.rollingwindow = self.getRollingwindow(\
-            self.Param['trainParam']['startresultdate'], self.Param['trainParam']['endresultdate'], \
-                self.Param['trainlen'], self.Param['testlen'], self.Param['step'])
+        self.rollingWindow = self.getRollingWindow(\
+            self.Param['trainParam']['startResultDate'], self.Param['trainParam']['endResultDate'], \
+                self.Param['trainLen'], self.Param['testLen'], self.Param['step'])
         # 2. 滚动窗口样本内外训练测试;
         for trainstart, trainend, testsart, testend in self.rollingwindow:
             log(f"train start at {trainstart} end at {trainend}, test start at {testsart} end at {testend}", logLoc=self.logLoc)
@@ -41,20 +41,20 @@ class Modeling():
             self.testModel(model) #   d. 样本外模型预测 result
         self.getReport()# 3. 生成模型报告
     # 生成滑动训练窗口
-    def getRollingwindow(self, startresultdate, endresultdate, \
-                      trainlen=400, testlen=50, step=5, tradedates=None):
-        if tradedates==None:
-            tradedates = sorted(self.Data['date'].unique())
-        teststarts = [d for d in tradedates if d>=startresultdate][0:-1:testlen]
-        teststarts = [d for d in teststarts if d<=endresultdate]  # 所有测试区间开始点只需要在结果结束日期前即可
-        testends = [[d for d in tradedates if d<s][-1] for s in teststarts[1:]]
-        testends.append([d for d in tradedates if d<=endresultdate][-1])
+    def getRollingWindow(self, startResultDate, endResultDate, \
+                      trainLen=750, testLen=50, step=5, tradeDates=None):
+        if tradeDates==None:
+            tradeDates = sorted(self.Data['date'].unique())
+        testStarts = [d for d in tradeDates if d>=startResultDate][0:-1:testLen]
+        testStarts = [d for d in testStarts if d<=endResultDate]  # 所有测试区间开始点只需要在结果结束日期前即可
+        testEnds = [[d for d in tradeDates if d<s][-1] for s in testStarts[1:]]
+        testEnds.append([d for d in tradeDates if d<=endResultDate][-1])
         def offset(date, n): # 前移n天,日期不足取第一天
-            predates = [d for d in tradedates if d<date]
-            return tradedates[0] if n>len(predates) else predates[-n]
-        trainstarts = [offset(d, step+trainlen) for d in teststarts]
-        trainends = [offset(d, step+1) for d in teststarts]
-        return zip(trainstarts, trainends, teststarts, testends)  # 训练集开始结束日期,测试集开始日期
+            preDates = [d for d in tradeDates if d<date]
+            return tradeDates[0] if n>len(preDates) else preDates[-n]
+        trainStarts = [offset(d, step+trainLen) for d in testStarts]
+        trainEnds = [offset(d, step+1) for d in testStarts]
+        return zip(trainStarts, trainEnds, testStarts, testEnds)  # 训练集开始结束日期,测试集开始日期
     def saveFilter():
         pass
     def saveModel():
