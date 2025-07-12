@@ -1,6 +1,7 @@
 import MLQuant as MLQ
 import os
 
+# paramDict保存全部子任务配置文件信息(仅需有变化部分)
 # 需要一个模板文件夹 temp 其中包含单个子任务文件 job.py 以及对应的配置文件 Param.json
 def subJobs(paramDict, workers, runJobsName='subJobs', tempDir='temp', singleMaxTime=24*3600):
     from joblib import Parallel, delayed
