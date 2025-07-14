@@ -1,34 +1,35 @@
 import pandas as pd
+import MLQuant as MLQ
 import datetime, os
 
-def log(*txt, logLoc=''):
-    try:
-        f = open(os.path.join(logLoc,'log.txt'),'a+', encoding='utf-8')
-        write_str = ('\n'+' '*35).join([str(i) for i in txt])
-        f.write('%s,        %s\n' % \
-            (datetime.datetime.now(), write_str))
-        f.close()
-    except PermissionError as e:
-        print(f"Error: {e}. You don't have permission to access the specified file.")
 
 # 滚动窗口训练, 样本内外测试
 class Modeling():
-    # 输入数据以及模型参数
-    def __init__(self, Data, Param, model, featureFilter=None, logLoc='./'):
-        self.Data = Data.reset_index(drop=True)  # 避免index不唯一
-        self.Param = Param  # {'trainParam':***, 'featureParam':***, 'modelParam':***}
+    # 配置文件Param，数据、模型、特征筛选器、log地址等均可从配置文件中调用，
+    # 也可以在
+    def __init__(self, Param, Data=None, \
+                 model=None, featureFilter=None, logLoc=None):
+        self.Param = Param  # {'trainParam':***, 'featureParam':***, 'modelParam':***, 'logLoc':***}
+        if type(Data)!=type(None):
+            self.Data = Data.reset_index(drop=True)  # 避免index不唯一
+        else:
+            Param['trainParam']
+        if type(model)!=type(None):
+            self.model = model # class Model
+        else:
+            self.model = MLQ.io.importMyClass(Param['featureParam'][])
         self.featureFilter = featureFilter # class Filter
-        self.model = model # class Model
-        self.logLoc = logLoc
+        if 'logLoc' not in Param.keys():
+            self.logLoc = logLoc
     def run(self): 
-        log("开始Modeling") 
+        MLQ.io.log("开始Modeling") 
         # 1. 生成滑动训练/测试窗口;
         self.rollingWindow = self.getRollingWindow(\
             self.Param['trainParam']['startResultDate'], self.Param['trainParam']['endResultDate'], \
                 self.Param['trainLen'], self.Param['testLen'], self.Param['step'])
         # 2. 滚动窗口样本内外训练测试;
         for trainstart, trainend, testsart, testend in self.rollingwindow:
-            log(f"train start at {trainstart} end at {trainend}, test start at {testsart} end at {testend}", logLoc=self.logLoc)
+            MLQ.io.log(f"train start at {trainstart} end at {trainend}, test start at {testsart} end at {testend}", logLoc=self.logLoc)
             filter = self.featureFilter(self.Param['featureParam'], trainstart, trainend)  #   a. 创建featureSelection对象
             featureNames = filter.filtFeature()
             self.saveFilter(filter)  # 保存因子过滤器self.store
