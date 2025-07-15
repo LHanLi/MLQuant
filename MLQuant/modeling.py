@@ -14,11 +14,14 @@ class Modeling():
             self.Data = Data.reset_index(drop=True)  # 避免index不唯一
         else:
             Param['trainParam']
+        if type(featureFilter)!=type(None):
+            self.featureFilter = featureFilter # class featureFilter 
+        else:
+            self.featureFilter = MLQ.io.importMyClass(Param['featureParam']['selectFilter'])
         if type(model)!=type(None):
             self.model = model # class Model
         else:
-            self.model = MLQ.io.importMyClass(Param['featureParam'][])
-        self.featureFilter = featureFilter # class Filter
+            self.model = MLQ.io.importMyClass(Param['featureParam']['selectModel'])
         if 'logLoc' not in Param.keys():
             self.logLoc = logLoc
     def run(self): 
