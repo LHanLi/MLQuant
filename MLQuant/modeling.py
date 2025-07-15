@@ -32,10 +32,10 @@ class Modeling():
         # 2. 滚动窗口样本内外训练测试;
         for trainstart, trainend, testsart, testend in self.rollingwindow:
             MLQ.io.log(f"train start at {trainstart} end at {trainend}, test start at {testsart} end at {testend}", logLoc=self.logLoc)
-            filter = self.featureFilter(self.Param['featureParam'], \
+            filt = self.featureFilter(self.Param['featureParam'], \
                             trainstart, trainend)  #   a. 创建featureSelection对象
-            featureNames = filter.filtFeature()
-            self.saveFilter(filter)  # 保存因子过滤器self.store
+            featureNames = filt.filtFeature()
+            self.saveFilter(filt)  # 保存因子过滤器self.store
             self.Param['modelParam']['_trainstart'] = trainstart
             self.Param['modelParam']['_trainend'] = trainend # 在Param['modelParam']中加入该窗口开始结束日期（为了兼容generalModeling）
             model = self.model(featureNames, self.Param['modelParam']) #   b. 创建Model对象, 
