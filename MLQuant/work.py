@@ -11,8 +11,8 @@ def copyJobFiles(paramDict, tempDir='temp'):
         with open(os.path.join(tempDir, 'Param.json'), 'r') as f:
             param = json.load(f)
         # 按照paramDict(可能嵌套字典)修改para.json
-        def editParam(paramDict, param):
-            for k,v in paramDict.items():
+        def editParam(paramEdit, param):
+            for k,v in paramEdit.items():
                 if type(v) != type(dict()):
                     param[k] = v
                 else:
