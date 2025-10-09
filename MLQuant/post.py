@@ -3,6 +3,7 @@ import numpy as np
 import seaborn as sns
 import statsmodels.api as sm
 import matplotlib.pyplot as plt
+import copy
 
 # matplot绘图
 def matplot(r=1, c=1, sharex=False, sharey=False, w=13, d=7, hspace=0.3, wspace=0.2):
@@ -34,27 +35,30 @@ def matplot(r=1, c=1, sharex=False, sharey=False, w=13, d=7, hspace=0.3, wspace=
 
 class Post():
     def __init__(self, result, dailyAlpha, dailyPos):
-        self.result = result
+        self.result = copy.copy(result)
+        self.result["date"] = pd.to_datetime(self.result["date"].astype("string"))
         # 计算IC和benchmark
-        self.sectionsCorr = result[["date", "curTime", "predict", "Nbr240"]].groupby(['date', 'curTime']).corr().loc[:, "predict"].loc[:, :, "Nbr240"]
-        self.benchmark = (result.groupby(["date", "curTime"])["Nbr240"].mean()+1).groupby("date").prod()-1 # 一天所有截面
+        self.sectionsCorr = self.result[["date", "curTime", "predict", "Nbr240"]].groupby(['date', 'curTime']).corr().loc[:, "predict"].loc[:, :, "Nbr240"]
+        #benchmark = (result.groupby(["date", "curTime"])["Nbr240"].mean()+1).groupby("date").prod()-1 # 一天所有截面
         # 每日净值
-        dailyAlpha["date"] = pd.to_datetime(dailyAlpha["date"].astype("string"))
-        dailyAlpha = dailyAlpha.set_index("date")
-        self.dailyAlpha = dailyAlpha
+        self.dailyAlpha = copy.copy(dailyAlpha)
+        self.dailyAlpha["date"] = pd.to_datetime(self.dailyAlpha["date"].astype("string"))
+        self.dailyAlpha = self.dailyAlpha.set_index("date")
         self.chgDay = self.dailyAlpha["value"]/self.dailyAlpha["value"].shift().fillna(1)-1
         # 持仓
-        dailyPos["date"] = pd.to_datetime(dailyPos["date"].astype("string"))
-        dailyPos = dailyPos.set_index("date")
-        self.dailyPos = dailyPos
-    def general(self, loc=""):
+        self.dailyPos = copy.copy(dailyPos)
+        self.dailyPos["date"] = pd.to_datetime(self.dailyPos["date"].astype("string"))
+        self.dailyPos = self.dailyPos.set_index("date")
+    # 按天对净值进行分析
+    def daily(self, benchmark, loc=""):
+        self.benchmark = benchmark
         plt, fig, ax = matplot(2, 2, w=16, d=8)
         # 收益分析
-        ann = self.dailyAlpha["value"].iloc[-1]**(250/len(self.dailyAlpha))-1
-        sharpe = ann/(np.sqrt(250)*self.chgDay.std())
-        drawdown = (self.dailyAlpha["value"]/self.dailyAlpha["value"].cummax()-1)
+        self.ann = self.dailyAlpha["value"].iloc[-1]**(250/len(self.dailyAlpha))-1
+        self.sharpe = self.ann/(np.sqrt(250)*self.chgDay.std())
+        self.drawdown = (self.dailyAlpha["value"]/self.dailyAlpha["value"].cummax()-1)
         # CAMP模型(很可能有很强的异方差和自相关问题)
-        x = sm.add_constant(self.benchmark.loc[self.chgDay.index[0]:self.chgDay.index[-1]].values.reshape(-1, 1))
+        x = sm.add_constant(benchmark.values.reshape(-1, 1))
         y = self.chgDay.values
         capm = sm.OLS(y, x).fit()
         # 同方差检验
@@ -67,33 +71,33 @@ class Post():
         from statsmodels.stats.stattools import durbin_watson
         dw = durbin_watson(capm.resid)
         print(f"Durbin-Watson: {dw}")  # 接近 2 表示无自相关
-        ax[0][0].set_title(f"年化: {100*ann:.2f}%, 夏普: {sharpe:.2f}, beta: {capm.params[1]:.2f}, alpha: {100*capm.params[0]:.2f}% ({test[1]:.2f}, {dw:.1f})\n"\
+        ax[0][0].set_title(f"年化: {100*self.ann:.2f}%, 夏普: {self.sharpe:.2f}, beta: {capm.params[1]:.2f}, alpha: {100*capm.params[0]:.2f}% ({test[1]:.2f}, {dw:.1f})\n"\
             f"每日一遇:{100*self.chgDay.quantile(0.5):.2f}%, 每周一遇:{100*self.chgDay.quantile(0.2):.2f}/{100*self.chgDay.quantile(0.8):.2f}%, 每月一遇:{100*self.chgDay.quantile(0.05):.2f}/{100*self.chgDay.quantile(0.95):.2f}%")
         ax[0][0].plot(np.log(self.dailyAlpha['value']), linewidth=2, c="C3")
-        ax[0][0].plot(np.log((self.benchmark.loc[self.dailyAlpha.index]+1).cumprod()), c="C3")
-        ax[0][0].vlines(drawdown.index[drawdown.argmin()], 0, np.log(self.dailyAlpha["value"].max()), linewidth=2, color="C3", linestyles="--")
+        ax[0][0].plot(np.log((benchmark+1).cumprod()), c="C3")
+        ax[0][0].vlines(self.drawdown.index[self.drawdown.argmin()], 0, np.log(self.dailyAlpha["value"].max()), linewidth=2, color="C3", linestyles="--")
         ax[0][0].vlines(self.chgDay.index[self.chgDay.argmin()], 0, np.log(self.dailyAlpha["value"].max()), color="C7", linestyles="--")
         ax[0][0].set_ylabel("对数净值")
 
         # 超额分析
-        excess = self.chgDay-self.benchmark.loc[self.chgDay.index[0]:self.chgDay.index[-1]]
-        excess_ann = self.dailyAlpha["value"].iloc[-1]/(1+self.benchmark).prod()-1
-        excess_sharpe = excess_ann/(np.sqrt(250)*excess.std())
-        excess_cum = (1+excess).cumprod()
+        self.excess = self.chgDay-self.benchmark
+        self.excess_ann = self.dailyAlpha["value"].iloc[-1]/(1+benchmark).prod()-1
+        self.excess_sharpe = self.excess_ann/(np.sqrt(250)*self.excess.std())
+        excess_cum = (1+self.excess).cumprod()
         excess_drawdown = (excess_cum/excess_cum.cummax()-1)
-        ax[1][0].plot(np.log(excess+1).cumsum(), c="C2", linewidth=2)
-        ax[1][0].set_title(f"年化: {100*excess_ann:.2f}, 夏普: {excess_sharpe:.2f}, 平均IC: {100*self.sectionsCorr.loc[self.dailyAlpha.index].mean():.2f}\n"
-                f"每日一遇:{100*excess.quantile(0.5):.2f}%, 每周一遇:{100*excess.quantile(0.2):.2f}/{100*excess.quantile(0.8):.2f}%, 每月一遇:{100*excess.quantile(0.05):.2f}/{100*excess.quantile(0.95):.2f}%")
+        ax[1][0].plot(np.log(self.excess+1).cumsum(), c="C2", linewidth=2)
+        ax[1][0].set_title(f"年化: {100*self.excess_ann:.2f}, 夏普: {self.excess_sharpe:.2f}\n"
+                f"每日一遇:{100*self.excess.quantile(0.5):.2f}%, 每周一遇:{100*self.excess.quantile(0.2):.2f}/{100*self.excess.quantile(0.8):.2f}%, 每月一遇:{100*self.excess.quantile(0.05):.2f}/{100*self.excess.quantile(0.95):.2f}%")
         ax[1][0].set_ylabel("对数超额净值")
         ax101 = ax[1][0].twinx()
-        ax101.plot(self.sectionsCorr.loc[self.dailyAlpha.index].groupby("date").mean().cumsum(), c="C0", linewidth=2)
+        ax101.plot(self.sectionsCorr.groupby("date").mean().cumsum(), c="C0", linewidth=2)
         ax101.set_ylabel("累计IC")
 
         # 回撤分析
-        ax[0][1].plot(drawdown, c="C3")
+        ax[0][1].plot(self.drawdown, c="C3")
         ax[0][1].plot(excess_drawdown, c="C2")
-        ax[0][1].set_title(f"最大回撤: {-100*drawdown.min():.2f}%, 单日最大回撤: {-100*self.chgDay.min():.2f}%\n"
-                        f"超额最大回撤: {-100*excess_drawdown.min():.2f}%, 单日超额最大回撤: {-100*excess.min():.2f}%")
+        ax[0][1].set_title(f"最大回撤: {-100*self.drawdown.min():.2f}%, 单日最大回撤: {-100*self.chgDay.min():.2f}%\n"
+                        f"超额最大回撤: {-100*excess_drawdown.min():.2f}%, 单日超额最大回撤: {-100*self.excess.min():.2f}%")
         ax[0][1].set_ylabel("回撤")
 
         # 持仓分析
