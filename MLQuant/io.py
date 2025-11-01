@@ -1,6 +1,35 @@
 import numpy as np
 import pandas as pd
-import os, datetime, json
+import duckdb, os, datetime, json
+
+#==========================================
+#==========  duckdb sql 相关操作  ==============
+#==========================================
+def readSqlPqt(source, startdate=None, enddate=None, columns=["*"], filter="1=1", se="cc", pqtname="/*.pqt"):
+    if (startdate is None) and (enddate is None):
+        paths = [source]    
+    else:
+        if startdate is None:
+            startdate = "00000000"
+        if enddate is None:
+            enddate = "99999999"
+        paths = [os.path.join(source, d+pqtname) for d in os.listdir(source) if 
+                    ((d>startdate) if se[0]=='o' else (d>=startdate))\
+                    &((d<enddate) if se[1]=='o' else (d<=enddate))]
+    paths_sql = "['{}']".format("', '".join(paths))
+    query = f"""
+        SELECT {', '.join(columns)}
+        FROM read_parquet({paths_sql})
+        WHERE {filter}
+    """
+    print(query)
+    query_result = duckdb.sql(query)
+    return query_result 
+
+
+#==========================================
+#============  json相关操作 ================  
+#==========================================
 
 # 将内存中变量转化为json可以储存格式 
 def converjson(v):
@@ -56,9 +85,7 @@ def jsonconver(v):
     elif type(v)==list:
         return [jsonconver(i) for i in v]
     else:
-        return v
-    
-
+        return v 
 # 保存json
 def savejson(d, filename):
     if not os.path.exists(os.path.dirname(filename)):
@@ -78,6 +105,10 @@ def editjson(d, filename):
     with open(filename, 'w') as f:
         json.dump(para, f, indent=4)
 
+#=========================================================================
+#==========  通过字符串引入类，可以将要调用的类存储于本地文件中 ===============
+#=========================================================================
+
 # 通过字符串引入package或类  "numpy.array"
 import importlib
 def importMyClass(*importLoc):
@@ -94,6 +125,9 @@ def importMyClass(*importLoc):
         else:
             return importMyClass(getattr(importLoc[0], importLoc[1][0]), importLoc[1][1:])
 
+#==========================================
+#==============  记录日志 ==================
+#==========================================
 
 def log(*txt, logLoc=''):
     try:
