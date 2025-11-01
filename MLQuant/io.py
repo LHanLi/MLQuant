@@ -24,7 +24,7 @@ def readSqlPqt(source, startdate=None, enddate=None, columns=["*"], filter="1=1"
     """
     print(query)
     query_result = duckdb.sql(query)
-    return query_result 
+    return query_result
 
 
 #==========================================
