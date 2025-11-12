@@ -33,6 +33,56 @@ def matplot(r=1, c=1, sharex=False, sharey=False, w=13, d=7, hspace=0.3, wspace=
     plt.gcf().autofmt_xdate()
     return plt, fig, ax
 
+# 模型样本内外预测效果
+def plotPredict(result, ISStartDate, ISEndDate, OOSStartDate, OOSEndDate, namey, namey_pred): 
+    from sklearn.metrics import mean_squared_error, r2_score
+    df_IS = result[(result["date"]>=int(ISStartDate))&(result["date"]<int(ISEndDate))]
+    datesicIS = df_IS[[namey, namey_pred, 'date']].groupby('date').\
+                corr().iloc[0::2, 1].reset_index(level=1, drop=True)
+    rmseIS = np.sqrt(mean_squared_error(df_IS[namey], df_IS[namey_pred]))
+    r2IS = r2_score(df_IS[namey], df_IS[namey_pred])
+    icIS = 100*np.sqrt(r2IS)  # 样本内
+
+    df_OOS = result[(result["date"]>=int(OOSStartDate))&(result["date"]<int(OOSEndDate))]
+    datesicOOS = df_OOS[[namey, namey_pred, 'date']].groupby('date').\
+                corr().iloc[0::2, 1].reset_index(level=1, drop=True)
+    rmseOOS = np.sqrt(mean_squared_error(df_OOS[namey], df_OOS[namey_pred]))
+    r2OOS = r2_score(df_OOS[namey], df_OOS[namey_pred])
+    icOOS = 100*np.sqrt(r2_score(df_OOS[namey], df_OOS[namey_pred]))  # 样本外
+
+    plt, fig, ax = matplot(2, 2)
+    # 样本内全截面
+    ax[0][0].plot(np.linspace(min(min(df_IS[namey]), min(df_IS[namey_pred])),\
+                    max(max(df_IS[namey]), max(df_IS[namey_pred]) ), 100),\
+                   np.linspace(min(min(df_IS[namey]), min(df_IS[namey_pred])),\
+                    max(max(df_IS[namey]), max(df_IS[namey_pred]) ), 100), c='C7')
+    #ax[0][0].set_xlim(min(df_IS[namey]), max(df_IS[namey]))
+    #ax[0][0].set_ylim(min(df_IS[namey_pred]), max(df_IS[namey_pred]))
+    ax[0][0].scatter(df_IS[namey], df_IS[namey_pred])
+    ax[0][0].set_xlabel('IS 目标值')
+    ax[0][0].set_ylabel('全截面预测')
+    ax[0][0].set_title(f"rmse:{rmseIS:.5f}, R2:{r2IS:.2f}, IC:{icIS:.2f}")
+    # 样本外
+    ax[0][1].plot(np.linspace(min(min(df_OOS[namey]), min(df_OOS[namey_pred])),\
+                    max(max(df_OOS[namey]), max(df_OOS[namey_pred]) ), 100),\
+                   np.linspace(min(min(df_OOS[namey]), min(df_OOS[namey_pred])),\
+                    max(max(df_OOS[namey]), max(df_OOS[namey_pred]) ), 100), c='C7')
+    #ax[0][1].set_xlim(min(df_OOS[namey]), max(df_OOS[namey]))
+    #ax[0][1].set_ylim(min(df_OOS[namey_pred]), max(df_OOS[namey_pred]))
+    ax[0][1].scatter(df_OOS[namey], df_OOS[namey_pred])
+    ax[0][1].set_xlabel('OOS 目标值')
+    ax[0][1].set_title(f"OOS rmse:{rmseOOS:.5f}, R2:{r2OOS:.2f}, IC:{icOOS:.2f}")
+    # 样本内单截面累计
+    ax[1][0].plot(datesicIS.cumsum().values)
+    ax[1][0].set_title(f"IC:{100*datesicIS.mean():.2f}")
+    ax[1][0].set_ylabel('单截面累计IC')
+    ax[1][0].set_xlabel(f'从{df_IS['date'].iloc[0]}到{df_IS['date'].iloc[-1]}')
+    ax[1][1].plot(datesicOOS.cumsum().values)
+    ax[1][1].set_title(f"IC:{100*datesicOOS.mean():.2f}")
+    ax[1][1].set_xlabel(f'从{df_OOS['date'].iloc[0]}到{df_OOS['date'].iloc[-1]}')
+    return plt, fig, ax
+
+
 class Post():
     def __init__(self, result, dailyAlpha, dailyPos, barAlpha=None):
         self.result = copy.copy(result)
@@ -126,7 +176,7 @@ class Post():
     # T0 日内净值变化
     def T0(self, loc=""):
         self.barChg = self.barAlpha.groupby("curTime")["chg"].mean()
-        fig, plt, ax = matplot()
+        plt, fig, ax = matplot()
         ax.plot(np.hstack([self.barChg.loc[:113000000].values, np.zeros(30), self.barChg.loc[130000000:]]).cumsum())
         if loc=="":
             plt.show()
