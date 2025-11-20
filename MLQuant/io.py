@@ -1,6 +1,62 @@
 import numpy as np
 import pandas as pd
+from concurrent.futures import ThreadPoolExecutor, as_completed
+import pyarrow.parquet as pq
+import pyarrow as pa
 import duckdb, os, datetime, json
+
+#==========================================
+#========= 数据读写操作 =====================
+#===========================================
+
+# 将 DataFrame 按{output_root}/{group_col1}/{group_col2}.pqt分组写入硬盘
+def saveDataFrame(df, output_root = "../data/raw", max_workers: int = None):
+    """
+    df : 需要包含date:int64, curTime:int64
+    output_root : 输出根目录。
+    max_workers : 线程池最大线程数。默认为 min(16, CPU核数 + 4)。
+    """
+    group_cols = ('date', 'curTime')
+    if not all(col in df.columns for col in group_cols):
+        raise ValueError(f"DataFrame must contain columns: {group_cols}")
+    
+    os.makedirs(output_root, exist_ok=True)
+    
+    if max_workers is None:
+        max_workers = min(16, (os.cpu_count() or 4) + 4)
+    def _write_single_group(args):
+        key, group_df = args
+        if isinstance(key, (tuple, list)):
+            dir_name = str(key[0])
+            file_name = str(key[1])
+        else:
+            # 如果只有一列分组（兼容性）
+            dir_name = str(key)
+            file_name = "data"
+        
+        dir_path = os.path.join(output_root, dir_name)
+        os.makedirs(dir_path, exist_ok=True)
+        file_path = os.path.join(dir_path, f"{file_name}.pqt")
+        
+        data_to_write = group_df
+        
+        table = pa.Table.from_pandas(data_to_write, preserve_index=False)
+        pq.write_table(table, file_path, compression="snappy")
+
+    # 执行分组
+    groups = list(df.groupby(list(group_cols)))
+    
+    # 使用线程池写入
+    with ThreadPoolExecutor(max_workers=max_workers) as executor:
+        # 使用 as_completed 可选地监控进度或捕获异常
+        futures = [executor.submit(_write_single_group, g) for g in groups]
+        for future in as_completed(futures):
+            # 可在此添加日志或异常处理
+            future.result()  # 触发潜在异常
+
+    print(f"Successfully wrote df({df.shape}, {len(df["date"].unique())}dates, "\
+          f"{len(df["curTime"].unique())}curTimes) to '{output_root}'")
+
 
 #==========================================
 #==========  duckdb sql 相关操作  ==============
