@@ -74,11 +74,18 @@ def plotPredict(result, ISStartDate, ISEndDate, OOSStartDate, OOSEndDate, namey,
     ax[0][1].set_title(f"OOS rmse:{rmseOOS:.5f}, R2:{r2OOS:.2f}, IC:{icOOS:.2f}")
     # 样本内单截面累计
     ax[1][0].plot(datesicIS.cumsum().values)
-    ax[1][0].set_title(f"IC:{100*datesicIS.mean():.2f}")
+    ax10_twinx = ax[1][0].twinx()
+    ax10_twinx.plot(datesicIS.rolling(5).mean().values, c="C2")
+    ax[1][0].set_title(f"IC:{100*datesicIS.mean():.2f}, ICIR:{(datesicIS.mean()/datesicIS.std()):.2f}, "\
+                f"rollingICIR:{(datesicIS.rolling(5).mean().mean()/datesicIS.rolling(5).mean().std()):.2f}")
     ax[1][0].set_ylabel('单截面累计IC')
     ax[1][0].set_xlabel(f'从{df_IS['date'].iloc[0]}到{df_IS['date'].iloc[-1]}')
+    # 样本外
     ax[1][1].plot(datesicOOS.cumsum().values)
-    ax[1][1].set_title(f"IC:{100*datesicOOS.mean():.2f}")
+    ax11_twinx = ax[1][1].twinx()
+    ax11_twinx.plot(datesicOOS.rolling(5).mean().values, c="C2")
+    ax[1][1].set_title(f"IC:{100*datesicOOS.mean():.2f}, ICIR:{(datesicOOS.mean()/datesicOOS.std()):.2f}, "\
+                f"rollingICIR:{(datesicOOS.rolling(5).mean().mean()/datesicOOS.rolling(5).mean().std()):.2f}")
     ax[1][1].set_xlabel(f'从{df_OOS['date'].iloc[0]}到{df_OOS['date'].iloc[-1]}')
     return plt, fig, ax
 
