@@ -89,6 +89,91 @@ def plotPredict(result, ISStartDate, ISEndDate, OOSStartDate, OOSEndDate, namey,
     ax[1][1].set_xlabel(f'从{df_OOS['date'].iloc[0]}到{df_OOS['date'].iloc[-1]}')
     return plt, fig, ax
 
+# 日度收益率分析
+def plotDay(returnDay, benchmark, loc=""):
+    plt, fig, ax = matplot(2, 2, w=16, d=8)
+    
+    # CAMP模型(很可能有很强的异方差和自相关问题)
+    x = sm.add_constant(benchmark.values.reshape(-1, 1))
+    y = returnDay.values
+    capm = sm.OLS(y, x).fit()
+    import statsmodels.stats.api as sms
+    from statsmodels.compat import lzip
+    name = ['Lagrange multiplier statistic', 'p-value', 'f-value', 'f p-value']
+    test = sms.het_breuschpagan(capm.resid, capm.model.exog)
+    from statsmodels.stats.stattools import durbin_watson
+    dw = durbin_watson(capm.resid)
+    fig.suptitle(f"CAPM模型, beta:{capm.params[1]:.2f}, alpha:{100*capm.params[0]:.2f}%, 残差收益率同方差p值:{test[1]:.2f}, 自相关检验:{dw:.1f}", fontsize=20)
+
+    # === 策略和基准净值 ===
+    net = (returnDay+1).cumprod()
+    net_benchmark = (benchmark+1).cumprod()
+    ann = net.iloc[-1]**(250/len(returnDay))-1
+    sharpe = ann/(np.sqrt(250)*returnDay.std())
+    drawdown = net/net.cummax()-1
+    drawdown_benchmark = net_benchmark/net_benchmark.cummax()-1
+    ax[0][0].plot(np.log(net), c="C3", linewidth=2)
+    ax[0][0].plot(np.log(net_benchmark), c="C0")
+    ax00_ = ax[0][0].twinx()
+    ax00_.plot(100*drawdown, c="C3", alpha=0.5, linewidth=2)
+    ax00_.plot(100*drawdown_benchmark, c="C0", alpha=0.5)
+    ax[0][0].vlines(returnDay.index[returnDay.argmin()], np.log(min(net.min(), net_benchmark.min())), \
+            np.log(max(net.max(), net_benchmark.max()))*1.1, \
+                color="C3", linewidth=2, linestyles="--") # 单日最大回撤日期
+    ax[0][0].set_title(f"年化: {100*ann:.2f}%, 夏普: {sharpe:.2f}, "\
+        +f"最大回撤: {-100*drawdown.min():.1f}%, 单日最大回撤: {-100*returnDay.min():.1f}%") 
+            # p<0.05表示显著异方差 范围(0, 4) 大于2表示负自相关，小于2表示正自相关
+    ax[0][0].set_ylabel("对数净值")
+    ax[0][0].tick_params(axis='x', labelbottom=True, rotation=30)
+    import matplotlib.ticker as mticker # 日度收益直方图
+    weights = np.ones_like(returnDay) / len(returnDay)
+    n, bins, patches = ax[0][1].hist(returnDay, bins=20,  weights=weights, color='skyblue', edgecolor='black', alpha=0.7)
+    ax[0][1].yaxis.set_major_formatter(mticker.PercentFormatter(xmax=1, decimals=1))
+    bin_centers = 0.5 * (bins[1:] + bins[:-1])
+    ax[0][1].set_xticks(bin_centers)
+    ax[0][1].set_xticklabels([f"{100*center:.2f}" for center in bin_centers], rotation=45, ha="right")
+    ax[0][1].tick_params(axis='x', labelbottom=True)
+    ax[0][1].set_title(f"每日一遇:{100*returnDay.quantile(0.5):.2f}%, 每周一遇:{100*returnDay.quantile(0.2):.2f}/{100*returnDay.quantile(0.8):.2f}%, 每月一遇:{100*returnDay.quantile(0.05):.2f}/{100*returnDay.quantile(0.95):.2f}%")
+    ax[0][1].set_xlabel(f'日度收益率(%),胜率{(returnDay>0).mean()*100:.2f}%')
+    ax[0][1].set_ylabel('区间收益占比(%)')
+
+    ## === 超额收益 ===
+    excess = returnDay-benchmark
+    excess_ann = net.iloc[-1]/(1+benchmark).prod()-1
+    excess_sharpe = excess_ann/(np.sqrt(250)*excess.std())
+    excess_net = (1+excess).cumprod()
+    excess_drawdown = (excess_net/excess_net.cummax()-1)
+    ax[1][0].plot(np.log(excess_net), c="C3")
+    ax10_ = ax[1][0].twinx()
+    ax10_.plot(100*excess_drawdown, c="C3", alpha=0.5, linewidth=2)
+    ax[1][0].vlines(excess.index[excess.argmin()], np.log(excess_net.min()), np.log(excess_net.max())*1.1,\
+                color="C3", linewidth=2, linestyles="--") # 单日最大回撤日期
+    ax[1][0].set_title(f"年化: {100*excess_ann:.2f}%, 夏普: {excess_sharpe:.2f}, "\
+        +f"最大回撤: {-100*excess_drawdown.min():.1f}%, 单日最大回撤: {-100*excess.min():.1f}%") 
+    ax[1][0].set_ylabel("对数净值")
+    import matplotlib.ticker as mticker # 日度收益直方图
+    weights = np.ones_like(excess) / len(excess)
+    n, bins, patches = ax[1][1].hist(excess, bins=20,  weights=weights, color='skyblue', edgecolor='black', alpha=0.7)
+    ax[1][1].yaxis.set_major_formatter(mticker.PercentFormatter(xmax=1, decimals=1))
+    bin_centers = 0.5 * (bins[1:] + bins[:-1])
+    ax[1][1].set_xticks(bin_centers)
+    ax[1][1].set_xticklabels([f"{100*center:.2f}" for center in bin_centers], rotation=45, ha="right")
+    ax[1][1].set_title(f"每日一遇:{100*excess.quantile(0.5):.2f}%, 每周一遇:{100*excess.quantile(0.2):.2f}/{100*excess.quantile(0.8):.2f}%, 每月一遇:{100*excess.quantile(0.05):.2f}/{100*excess.quantile(0.95):.2f}%")
+    ax[1][1].set_xlabel(f'日度收益率(%),胜率{(excess>0).mean()*100:.2f}%')
+    ax[1][1].set_ylabel('区间收益占比*5(%)')
+    
+    plt.tight_layout()
+    if loc=="":
+        plt.show()
+    else:
+        plt.savefig(loc)
+        plt.show()
+
+
+
+# 持仓分析
+def plotHold():
+    pass
 
 class Post():
     def __init__(self, result, dailyAlpha, dailyPos, barAlpha=None):
