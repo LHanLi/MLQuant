@@ -1,12 +1,20 @@
 import pandas as pd
 import MLQuant as MLQ
-import threading, glob, os
+import json, pickle, threading, glob, os
 
-# 数据格式为 symbol::string, date::in64, curTime::int64, legalData::bool, factor0, factor1, ...
+"""
+实现模型滚动训练
+数据格式要求：
+特征features需要包含如下列 
+date::int64, curTime::int64, symbol::string, legalData::bool
+factor0, factor1, ..
+预测标签Nbr需要包含如下列
+date::int64, symbol::string, Nbr
+"""
 
 
 # ==============================
-# 异步数据加载器（仅在 Data=None 时使用）
+# 异步数据加载器（如果不在内存中直接输入Data，则从硬盘中异步读取数据）
 # ==============================
 class AsyncDataLoader:
     def __init__(self, data_dir, all_trade_dates):
@@ -71,32 +79,39 @@ class AsyncDataLoader:
 
 
 # ==============================
-# Modeling 主类（支持 Data=None 或 Data=DataFrame）
+# Modeling 主类
 # ==============================
 class Modeling():
-    # Param 字典格式,需包含"trainParam", "featureParam", "modelParam", "logLoc"
+    # Param 需包含"trainParam", "featureParam", "modelParam"三类参数，以及log的存储路径"logLoc"
     # Data pd.DataFrame格式, 
     #   如果未直接输入则会从Param["trainParam"]["featureDir"]路径下异步读取.
-    # model 自定义的模型类，需实现train, predict功能。
-    #   如果未直接输入则会直接import Param["modelParam"]["selectModel"]中字符串路径的类，如"mylib.myModels.model0".
-    # featureFilter 自定义模型类，需实现filtFeature() 返回输入模型特征名的list。
-    #   如果未直接输入则会直接import Param["modelParam"]["selectModel"]中字符串路径的类，如"mylib.myFilters.filter0".
+    # model 自定义的模型类，传入modelParam初始化，需实现train(), predict()功能。
+    #   如果未直接输入则会直接import Param["modelParam"]["selectModel"]中字符串路径的类，
+    #   例如参数为"mylib.myModels.model0"，等价于import mylib.myModels.model0
+    # featureFilter 自定义特征筛选类，传入featureParam初始化，需实现filtFeature() 返回输入模型特征名的list。
+    #   如果未直接输入则会直接import Param["modelParam"]["selectModel"]中字符串路径的类，
+    #   例如"mylib.myFilters.filter0".
     def __init__(self, Param={"trainParam":{
                             "strResultDate":"20250101",
                             "endResultDate":"20260101",
                             "trainSetLen":600,
                             "testSetLen":20,
-                            "testAndFitStep":3,
-                            "predict_label":"Nbr241",
+                            "stepTrainAndTest":3,
+                            "featureDir":"./features/",
+                            "predictDir":"./Nbr",
+                            "predictLabel":"Nbr241",
                             "outPath":"./",
                             },
-                            "featureParam":{}, "modelParam":{}, "logLoc":"./"}, \
+                            "featureParam":{"selectFilter":"MLQuant.sample.floatFilter"}, 
+                            "modelParam":{"selectModel":"MLQuant.sample.lgbModel"}, 
+                            "logLoc":"./"}, \
                 Data=None, model=None, featureFilter=None):
         self.Param = Param
 
-        self.Data = Data  # 可能是 DataFrame，也可能是 None
-        self.async_loader = None
-        self.use_async = Data is None  # 关键标志：是否启用异步加载
+        if Data is None:
+            raise NotImplementedError("当前仅支持传入Data参数，后续版本将支持异步从硬盘加载数据")
+        else:
+            self.Data = Data
         
         if featureFilter is not None:
             self.featureFilter = featureFilter
@@ -112,66 +127,62 @@ class Modeling():
     # 日志函数
     def log(self, text):
         MLQ.io.log(text, logLoc=self.logLoc)
+    # 生成滚动窗口
+    def getRollingWindow(self, strResultDate, endResultDate, 
+                         trainSetLen, testSetLen, stepTrainAndTest):
+        tradeDates = sorted(os.listdir(self.Param['trainParam']['featureDir']))
+        # 找出在 [startResultDate, endResultDate] 内的测试起点
+        valid_test_starts = [d for d in tradeDates if strResultDate <= d <= endResultDate]
+        if not valid_test_starts:
+            self.log("!!! Error !!! 特征数据日期范围和目标result范围不匹配")
+            raise ValueError
+        # 每 testSetLen 天一个测试窗口起点
+        testStarts = valid_test_starts[::testSetLen]
+        testEnds = []
+        for s in testStarts:
+            idx = tradeDates.index(s)
+            end_idx = min(idx + testSetLen - 1, len(tradeDates) - 1)
+            testEnds.append(tradeDates[end_idx])
+        def offset(date, n):
+            preDates = [d for d in tradeDates if d < date]
+            return tradeDates[0] if n > len(preDates) else preDates[-n]
+        trainStarts = [offset(d, stepTrainAndTest + trainSetLen) for d in testStarts]
+        trainEnds = [offset(d, stepTrainAndTest + 1) for d in testStarts]
+        rollingWindows = list(zip(trainStarts, trainEnds, testStarts, testEnds))
+        self.log(f"全部滚动窗口如下，共 {len(trainStarts)} 组" + 
+                   "\n".join(["  ".join(i) for i in rollingWindows]))
+        return rollingWindows
+    # 处理单个模型
+    def processOneModel(self, train_start, train_end, test_start, test_end):
+        self.log(f"处理 train: {train_start} ~ {train_end}, test: {test_start} ~ {test_end}")
+        modelLoc = os.path.join(self.Param['trainParam']['outPath'], "model", 
+                                f"model_{test_start}_{test_end}")
+        # 获取训练/测试数据
+        trainData = self.Data[(self.Data['date']>=int(train_start)&
+                               (self.Data['date']<=int(train_end)))]
+        testData = self.Data[(self.Data['date']>=int(test_start)&
+                              (self.Data['date']<=int(test_end)))]
+        # 特征筛选
+        filt = self.featureFilter(self.Param['featureParam'])
+        feature_names = filt.filtFeature(trainData)
+        # 保存筛选器
 
-    def _get_all_trade_dates_from_disk(self, data_dir):
-        """扫描 data_dir 下的所有日期目录，返回日期列表"""
-        date_dirs = glob.glob(os.path.join(data_dir, "????????"))  # 匹配 YYYYMMDD
-        dates = []
-        for d in date_dirs:
-            basename = os.path.basename(d)
-            try:
-                dt = datetime.strptime(basename, "%Y%m%d").date()
-                dates.append(dt)
-            except ValueError:
-                continue
-        return sorted(set(dates))
+        # 训练模型
 
-    def loadData(self):
-        if self.use_async:
-            data_dir = self.Param.get('dataDir', 'data/')  # 建议在 Param 中配置
-            all_dates = self._get_all_trade_dates_from_disk(data_dir)
-            if not all_dates:
-                raise ValueError(f"No date directories found in {data_dir}")
-            self.async_loader = AsyncDataLoader(data_dir, all_dates)
-            MLQ.io.log(f"Async loader initialized with {len(all_dates)} trade days.", logLoc=self.logLoc)
-        else:
-            # 检查 Data 是否为 DataFrame
-            if not isinstance(self.Data, pd.DataFrame):
-                raise TypeError("If Data is provided, it must be a pandas DataFrame.")
-            if 'date' not in self.Data.columns:
-                raise ValueError("Input DataFrame must contain a 'date' column.")
-            self.Data['date'] = pd.to_datetime(self.Data['date'])
-            MLQ.io.log("Using provided DataFrame for modeling.", logLoc=self.logLoc)
+        # 测试模型 
 
-    def _get_data_slice(self, start_date, end_date):
-        """统一接口：无论异步还是内存 DataFrame，都返回切片"""
-        if self.use_async:
-            return self.async_loader.get_data_slice(start_date, end_date)
-        else:
-            mask = (self.Data['date'] >= pd.to_datetime(start_date)) & \
-                   (self.Data['date'] <= pd.to_datetime(end_date))
-            return self.Data[mask].copy()
-
+        # 保存模型与评估结果
+        self.saveModel(model)
+        self.evaluateModel(model)
+    # modeling 主流程
     def run(self): 
-        MLQ.io.log("加载数据或初始化异步加载器") 
-        self.loadData()
-        MLQ.io.log("开始滑动窗口建模") 
-        
-        # 获取用于生成窗口的日期列表
-        if self.use_async:
-            trade_dates = [pd.Timestamp(d) for d in self.async_loader.all_dates]
-        else:
-            trade_dates = sorted(self.Data['date'].dt.date.unique())
-            trade_dates = [pd.Timestamp(d) for d in trade_dates]
-
+        MLQ.io.log("1. 构建滚动窗口") 
         self.rollingWindow = self.getRollingWindow(
-            pd.to_datetime(self.Param['trainParam']['startResultDate']),
-            pd.to_datetime(self.Param['trainParam']['endResultDate']),
-            self.Param['trainLen'],
-            self.Param['testLen'],
-            self.Param['step'],
-            tradeDates=trade_dates
-        )
+            self.Param["trainParam"]["strResultDate"],
+            self.Param["trainParam"]["endResultDate"],
+            self.Param["trainParam"]['trainSetLen'],
+            self.Param["trainParam"]['testSetLen'],
+            self.Param["trainParam"]['stepTrainAndTest'])
 
         for train_start, train_end, test_start, test_end in self.rollingWindow:
             MLQ.io.log(f"train: {train_start} ~ {train_end}, test: {test_start} ~ {test_end}", logLoc=self.logLoc)
@@ -199,8 +210,6 @@ class Modeling():
             self.Param['modelParam']['_trainend'] = train_end
             model = self.model(featureNames, self.Param['modelParam'])
             model.train(Xi, Yi)
-            self.saveModel(model)
-            self.evaluateModel(model)
 
             # === 测试阶段 ===
             if self.use_async:
@@ -210,32 +219,46 @@ class Modeling():
 
         self.getReport()
 
-    # --- 以下方法保持不变（已修复 self）---
-    def getRollingWindow(self, startResultDate, endResultDate, 
-                         trainLen=750, testLen=50, step=5, tradeDates=None):
-        if tradeDates is None:
-            raise ValueError("tradeDates must be provided.")
-        tradeDates = sorted(tradeDates)
-        # 找出在 [startResultDate, endResultDate] 内的测试起点
-        valid_test_starts = [d for d in tradeDates if startResultDate <= d <= endResultDate]
-        if not valid_test_starts:
-            return []
-        # 每 testLen 天一个测试窗口起点
-        testStarts = valid_test_starts[::testLen]
-        testEnds = []
-        for s in testStarts:
-            idx = tradeDates.index(s)
-            end_idx = min(idx + testLen - 1, len(tradeDates) - 1)
-            testEnds.append(tradeDates[end_idx])
-        
-        def offset(date, n):
-            preDates = [d for d in tradeDates if d < date]
-            return tradeDates[0] if n > len(preDates) else preDates[-n]
-        
-        trainStarts = [offset(d, step + trainLen) for d in testStarts]
-        trainEnds = [offset(d, step + 1) for d in testStarts]
-        return list(zip(trainStarts, trainEnds, testStarts, testEnds))
+    #def _get_all_trade_dates_from_disk(self, data_dir):
+    #    """扫描 data_dir 下的所有日期目录，返回日期列表"""
+    #    date_dirs = glob.glob(os.path.join(data_dir, "????????"))  # 匹配 YYYYMMDD
+    #    dates = []
+    #    for d in date_dirs:
+    #        basename = os.path.basename(d)
+    #        try:
+    #            dt = datetime.strptime(basename, "%Y%m%d").date()
+    #            dates.append(dt)
+    #        except ValueError:
+    #            continue
+    #    return sorted(set(dates))
+    #def loadData(self):
+    #    if self.use_async:
+    #        data_dir = self.Param.get('dataDir', 'data/')  # 建议在 Param 中配置
+    #        all_dates = self._get_all_trade_dates_from_disk(data_dir)
+    #        if not all_dates:
+    #            raise ValueError(f"No date directories found in {data_dir}")
+    #        self.async_loader = AsyncDataLoader(data_dir, all_dates)
+    #        MLQ.io.log(f"Async loader initialized with {len(all_dates)} trade days.", logLoc=self.logLoc)
+    #    else:
+    #        # 检查 Data 是否为 DataFrame
+    #        if not isinstance(self.Data, pd.DataFrame):
+    #            raise TypeError("If Data is provided, it must be a pandas DataFrame.")
+    #        if 'date' not in self.Data.columns:
+    #            raise ValueError("Input DataFrame must contain a 'date' column.")
+    #        self.Data['date'] = pd.to_datetime(self.Data['date'])
+    #        MLQ.io.log("Using provided DataFrame for modeling.", logLoc=self.logLoc)
+    #def _get_data_slice(self, start_date, end_date):
+    #    """统一接口：无论异步还是内存 DataFrame，都返回切片"""
+    #    if self.use_async:
+    #        return self.async_loader.get_data_slice(start_date, end_date)
+    #    else:
+    #        mask = (self.Data['date'] >= pd.to_datetime(start_date)) & \
+    #               (self.Data['date'] <= pd.to_datetime(end_date))
+    #        return self.Data[mask].copy()
 
+
+
+    # --- 以下方法保持不变（已修复 self）---
     def saveFilter(self): pass
     def saveModel(self): pass
     def evaluateModel(self): pass
@@ -243,88 +266,54 @@ class Modeling():
     def getReport(self): pass
 
 
+# ==============================
+# 因子筛选基类
+# ==============================
+class Filter:
+    def __init__(self, featureParam):
+        self.featureParam = featureParam #因子筛选所需的其他参数
+        self.store = {}
+    def saveFilter(self, modelDir): # 储存因子筛选器
+        os.makedirs(modelDir, exist_ok=True)
+        with open(os.path.join(modelDir,"filter_store.json"), 'w') as f:
+            json.dump(MLQ.io.converjson(self.store), f, indent=4)
+        with open(os.path.join(modelDir, 'filter.pkl'), 'wb') as f:
+            pickle.dump(self, f)
+    def restoreModel(self,modelDir): #加载模型
+        with open(os.path.join(modelDir, 'filter.pkl'), 'rb') as f:
+            model = pickle.load(f)
+            self.__dict__.update(model.__dict__)
+    #def filtFeature(self, Xi, Yi):  # 需要自定义因子筛选过程，返回筛选后的特征名列表
 
-
-
-## 滚动窗口训练, 样本内外测试
-#class Modeling():
-#    # 配置文件Param，数据、模型、特征筛选器、log地址等均可从配置文件中调用，
-#    # 也可以在
-#    def __init__(self, Param, Data=None, \
-#                 model=None, featureFilter=None, logLoc=None):
-#        self.Param = Param  # {'trainParam':***, 'featureParam':***, 'modelParam':***, 'logLoc':***}
-#        self.Data = Data
-#        if type(featureFilter)!=type(None):
-#            self.featureFilter = featureFilter # class featureFilter 
-#        else:
-#            self.featureFilter = MLQ.io.importMyClass(Param['featureParam']['selectFilter'])
-#        if type(model)!=type(None):
-#            self.model = model # class Model
-#        else:
-#            self.model = MLQ.io.importMyClass(Param['modelParam']['selectModel'])
-#        if 'logLoc' not in Param.keys():
-#            self.logLoc = logLoc
-#    def run(self): 
-#        MLQ.io.log("加载数据") 
-#        self.loadData()
-#        MLQ.io.log("开始滑动窗口建模") 
-#        # 1. 生成滑动训练/测试窗口;
-#        self.rollingWindow = self.getRollingWindow(\
-#            self.Param['trainParam']['startResultDate'], self.Param['trainParam']['endResultDate'], \
-#                self.Param['trainLen'], self.Param['testLen'], self.Param['step'])
-#        # 2. 滚动窗口样本内外训练测试;
-#        for trainstart, trainend, testsart, testend in self.rollingwindow:
-#            MLQ.io.log(f"train start at {trainstart} end at {trainend}, test start at {testsart} end at {testend}", logLoc=self.logLoc)
-#            filt = self.featureFilter(self.Param['featureParam'], \
-#                            trainstart, trainend)  #   a. 创建featureSelection对象
-#            featureNames = filt.filtFeature()
-#            self.saveFilter(filt)  # 保存因子过滤器self.store
-#            self.Param['modelParam']['_trainstart'] = trainstart
-#            self.Param['modelParam']['_trainend'] = trainend # 在Param['modelParam']中加入该窗口开始结束日期（为了兼容generalModeling）
-#            model = self.model(featureNames, self.Param['modelParam']) #   b. 创建Model对象, 
-#            Datai = self.Data[(self.Data['date']<=trainend)&\
-#                              (self.Data['date']>=trainstart)] # 该段训练数据
-#            Xi = Datai[featureNames]
-#            Yi = Datai[self.Param['predict_label']]  # 获取该模型的训练数据 
-#            model.train(Xi, Yi)      # 训练模型
-#            self.saveModel(model) #   c. 保存self.model及self.store 
-#            self.evaluateModel(model) #   c. 模型样本内评价 model 
-#            self.testModel(model) #   d. 样本外模型预测 result
-#        self.getReport()# 3. 生成模型报告
-#    # 加载数据
-#    def loadData(self):
-#        if type(self.Data)==type(pd.Dataframe):
-#            pass
-#        else:
-#            self.Data = pd.read_parquet(self.Param['featureDir']) # 从文件中读取数据
-#    # 生成滑动训练窗口
-#    def getRollingWindow(self, startResultDate, endResultDate, \
-#                      trainLen=750, testLen=50, step=5, tradeDates=None):
-#        if tradeDates==None:
-#            tradeDates = sorted(self.Data['date'].unique())
-#        testStarts = [d for d in tradeDates if d>=startResultDate][0:-1:testLen]
-#        testStarts = [d for d in testStarts if d<=endResultDate]  # 所有测试区间开始点只需要在结果结束日期前即可
-#        testEnds = [[d for d in tradeDates if d<s][-1] for s in testStarts[1:]]
-#        testEnds.append([d for d in tradeDates if d<=endResultDate][-1])
-#        def offset(date, n): # 前移n天,日期不足取第一天
-#            preDates = [d for d in tradeDates if d<date]
-#            return tradeDates[0] if n>len(preDates) else preDates[-n]
-#        trainStarts = [offset(d, step+trainLen) for d in testStarts]
-#        trainEnds = [offset(d, step+1) for d in testStarts]
-#        return zip(trainStarts, trainEnds, testStarts, testEnds)  # 训练集开始结束日期,测试集开始日期
-#    def saveFilter():
-#        pass
-#    def saveModel():
-#        pass
-#    def evaluateModel():
-#        pass
-#    def testModel():
-#        pass
-#    def getReport():
-#        pass
-
-
-
-
-
+# ==============================
+# 模型基类
+# ==============================
+class Model:
+    def __init__(self, featureName=[], modelParam={}):
+        self.featureName = featureName
+        self.modelParam = modelParam
+        self.store = {}
+    def test(self, Xi): # 测试集测试
+        return self.predict(Xi)
+    def evaluate(self, Xi, Yi): # 评价模型
+        from sklearn.metrics import mean_squared_error, r2_score
+        y_pred = self.predict(Xi)
+        mse = mean_squared_error(Yi, y_pred)
+        r2 = r2_score(Yi, y_pred)
+        self.store['evaluate'] = {'rmse':np.sqrt(mse),\
+                    'R2':r2, 'ic':(lambda x: -np.sqrt(-x) if x<0 else np.sqrt(x))(r2),\
+                    'Yi':Yi.tolist(), 'y_pred':y_pred.tolist(),\
+                        'featureName':self.featureName}
+    def saveModel(self, modelDir): # 储存模型
+        os.makedirs(modelDir, exist_ok=True)
+        with open(os.path.join(modelDir,"model_store.json"), 'w') as f:
+            json.dump(MLQ.io.converjson(self.store), f, indent=4)
+        with open(os.path.join(modelDir, 'model.pkl'), 'wb') as f:
+            pickle.dump(self, f)
+    def restoreModel(self,modelDir): #加载模型
+        with open(os.path.join(modelDir, 'model.pkl'), 'rb') as f:
+            model = pickle.load(f)
+            self.__dict__.update(model.__dict__)
+    #def train(self, Xi, Yi):  # 需要自定义训练过程
+    #def predict(self, Xi): # 需要自定义预测过程 self.model即可
 
