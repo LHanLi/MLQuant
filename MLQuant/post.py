@@ -143,14 +143,14 @@ def plotDay(returnDay, benchmark, loc=""):
     excess_sharpe = excess_ann/(np.sqrt(250)*excess.std())
     excess_net = (1+excess).cumprod()
     excess_drawdown = (excess_net/excess_net.cummax()-1)
-    ax[1][0].plot(np.log(excess_net), c="C3")
+    ax[1][0].plot(np.log(excess_net), c="C3", linewidth=2)
     ax10_ = ax[1][0].twinx()
     ax10_.plot(100*excess_drawdown, c="C3", alpha=0.5, linewidth=2)
     ax[1][0].vlines(excess.index[excess.argmin()], np.log(excess_net.min()), np.log(excess_net.max())*1.1,\
                 color="C3", linewidth=2, linestyles="--") # 单日最大回撤日期
     ax[1][0].set_title(f"年化: {100*excess_ann:.2f}%, 夏普: {excess_sharpe:.2f}, "\
         +f"最大回撤: {-100*excess_drawdown.min():.1f}%, 单日最大回撤: {-100*excess.min():.1f}%") 
-    ax[1][0].set_ylabel("对数净值")
+    ax[1][0].set_ylabel("超额对数净值")
     import matplotlib.ticker as mticker # 日度收益直方图
     weights = np.ones_like(excess) / len(excess)
     n, bins, patches = ax[1][1].hist(excess, bins=20,  weights=weights, color='skyblue', edgecolor='black', alpha=0.7)
