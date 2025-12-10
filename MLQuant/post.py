@@ -89,6 +89,25 @@ def plotPredict(result, ISStartDate, ISEndDate, OOSStartDate, OOSEndDate, namey,
     ax[1][1].set_xlabel(f'从{df_OOS['date'].iloc[0]}到{df_OOS['date'].iloc[-1]}')
     return plt, fig, ax
 
+# 模型衰减
+def plotModelDecay(result, namey, namey_pred, modelStartList):
+    IC = result.loc[result["legalData"]].groupby("date")\
+        [[namey, namey_pred]].corr().loc[:, namey].loc[:, namey_pred]
+
+    cutICs = [IC.loc[s:e].iloc[:-1].reset_index(drop=True) for s,e in \
+        zip(modelStartList, modelStartList[1:]+[30000101])]
+    cutICs = pd.concat(cutICs, axis=1)
+
+    plt, fig, ax = matplot()
+    ax.plot(cutICs.mean(axis=1), linewidth=2, c="C3")
+    ax.set_ylabel("IC")
+    ax1 = ax.twinx()
+    ax1.plot(cutICs.std(axis=1), linewidth=5, alpha=0.3)
+    ax1.set_ylabel("标准差")
+    ax.set_title("模型衰减")
+
+    return plt, fig, ax
+
 # 日度收益率分析
 def plotDay(returnDay, benchmark, loc=""):
     plt, fig, ax = matplot(2, 2, w=16, d=8)
