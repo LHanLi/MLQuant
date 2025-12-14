@@ -3,6 +3,7 @@ import pandas as pd
 from concurrent.futures import ThreadPoolExecutor, as_completed
 import pyarrow.parquet as pq
 import pyarrow as pa
+from pathlib import Path
 import duckdb, os, datetime, json
 
 #==========================================
@@ -56,6 +57,92 @@ def saveDataFrame(df, output_root = "../data/raw", max_workers: int = None):
 
     print(f"Successfully wrote df({df.shape}, {len(df["date"].unique())}dates, "\
           f"{len(df["curTime"].unique())}curTimes) to '{output_root}'")
+# 加载saveDataFrame存储的数据
+def loadDataFrame(
+    output_root: str = "../data/raw",
+    date_range: tuple[int, int] | None = None,
+    curtime_range: tuple[int, int] | None = None,
+    max_workers: int | None = None
+):
+    """
+    从 output_root 目录下读取符合 {date}/{curTime}.pqt 格式的 Parquet 文件，
+    并合并为一个 DataFrame。仅加载在指定 date 和 curTime 范围内的文件。
+    
+    Parameters:
+    - output_root (str): Parquet 文件根目录。
+    - date_range (tuple[int, int] or None): (start_date, end_date)，包含端点。例如 (20231201, 20231205)
+    - curtime_range (tuple[int, int] or None): (start_time, end_time)，包含端点。例如 (93000, 150000)
+    - max_workers (int or None): 并发线程数，默认自动设置。
+    
+    Returns:
+    - pd.DataFrame: 合并后的原始 DataFrame。
+    """
+    output_path = Path(output_root)
+    if not output_path.exists():
+        raise FileNotFoundError(f"Output root directory not found: {output_root}")
+
+    if max_workers is None:
+        max_workers = min(16, (os.cpu_count() or 4) + 4)
+
+    # 解析 date 范围
+    date_min, date_max = None, None
+    if date_range is not None:
+        if len(date_range) != 2:
+            raise ValueError("`date_range` must be a tuple of two integers (start, end).")
+        date_min, date_max = date_range
+
+    # 解析 curTime 范围
+    time_min, time_max = None, None
+    if curtime_range is not None:
+        if len(curtime_range) != 2:
+            raise ValueError("`curtime_range` must be a tuple of two integers (start, end).")
+        time_min, time_max = curtime_range
+
+    file_paths = []
+
+    # 遍历所有 date 目录
+    for date_dir in output_path.iterdir():
+        if not date_dir.is_dir():
+            continue
+        try:
+            date_val = int(date_dir.name)
+        except ValueError:
+            continue  # 忽略非整数目录名
+
+        # 检查是否在 date 范围内
+        if date_min is not None and (date_val < date_min or date_val > date_max):
+            continue
+
+        # 遍历该日期下的所有 .pqt 文件
+        for pqt_file in date_dir.glob("*.pqt"):
+            try:
+                cur_time_val = int(pqt_file.stem)
+            except ValueError:
+                continue  # 忽略非整数文件名
+
+            # 检查是否在 curTime 范围内
+            if time_min is not None and (cur_time_val < time_min or cur_time_val > time_max):
+                continue
+
+            file_paths.append(str(pqt_file))
+
+    if not file_paths:
+        print("No files matched the specified date/curTime range.")
+        return pd.DataFrame()  # 返回空 DataFrame
+
+    def _read_file(file_path):
+        return pq.read_table(file_path).to_pandas()
+
+    # 并发读取
+    dfs = []
+    with ThreadPoolExecutor(max_workers=max_workers) as executor:
+        futures = [executor.submit(_read_file, fp) for fp in file_paths]
+        for future in as_completed(futures):
+            dfs.append(future.result())
+
+    final_df = pd.concat(dfs, ignore_index=True)
+    print(f"Loaded {len(file_paths)} files → DataFrame shape: {final_df.shape}")
+    return final_df
 
 
 #==========================================
