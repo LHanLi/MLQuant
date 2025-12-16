@@ -24,7 +24,7 @@ def saveDataFrame(df, output_root = "../data/raw", max_workers: int = None):
     os.makedirs(output_root, exist_ok=True)
     
     if max_workers is None:
-        max_workers = min(16, (os.cpu_count() or 4) + 4)
+        max_workers = min(64, (os.cpu_count() or 4) + 4)
     def _write_single_group(args):
         key, group_df = args
         if isinstance(key, (tuple, list)):
@@ -82,7 +82,7 @@ def loadDataFrame(
         raise FileNotFoundError(f"Output root directory not found: {output_root}")
 
     if max_workers is None:
-        max_workers = min(16, (os.cpu_count() or 4) + 4)
+        max_workers = min(64, (os.cpu_count() or 4) + 4)
 
     # 解析 date 范围
     date_min, date_max = None, None
