@@ -2,3 +2,4 @@
 [1202/142450.110:ERROR:registration_protocol_win.cc(106)] CreateFile: 系统找不到指定的文件。 (0x2)
 [1209/143753.313:ERROR:registration_protocol_win.cc(106)] CreateFile: 系统找不到指定的文件。 (0x2)
 [1215/152153.578:ERROR:registration_protocol_win.cc(106)] CreateFile: 系统找不到指定的文件。 (0x2)
+[1217/090717.379:ERROR:registration_protocol_win.cc(106)] CreateFile: 系统找不到指定的文件。 (0x2)
