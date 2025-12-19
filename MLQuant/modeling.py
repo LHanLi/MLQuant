@@ -1,5 +1,6 @@
 import pandas as pd
 import MLQuant as MLQ
+import numpy as np
 import json, pickle, threading, glob, os
 
 """
@@ -270,27 +271,27 @@ class Modeling():
 # 因子筛选基类
 # ==============================
 class Filter:
-    def __init__(self, featureParam):
+    def __init__(self, featureParam={}):
         self.featureParam = featureParam #因子筛选所需的其他参数
         self.store = {}
-    def saveFilter(self, modelDir): # 储存因子筛选器
-        os.makedirs(modelDir, exist_ok=True)
-        with open(os.path.join(modelDir,"filter_store.json"), 'w') as f:
+    def saveFilter(self, modelLoc): # 储存因子筛选器
+        os.makedirs(modelLoc, exist_ok=True)
+        with open(os.path.join(modelLoc,"filter_store.json"), 'w') as f:
             json.dump(MLQ.io.converjson(self.store), f, indent=4)
-        with open(os.path.join(modelDir, 'filter.pkl'), 'wb') as f:
+        with open(os.path.join(modelLoc, 'filter.pkl'), 'wb') as f:
             pickle.dump(self, f)
     def restoreModel(self,modelDir): #加载模型
         with open(os.path.join(modelDir, 'filter.pkl'), 'rb') as f:
             model = pickle.load(f)
             self.__dict__.update(model.__dict__)
-    #def filtFeature(self, Xi, Yi):  # 需要自定义因子筛选过程，返回筛选后的特征名列表
+    #def filtFeature(self, data):  # 需要自定义因子筛选过程，输入训练数据DataFrame返回筛选后的特征名列表
+
 
 # ==============================
 # 模型基类
 # ==============================
 class Model:
-    def __init__(self, featureName=[], modelParam={}):
-        self.featureName = featureName
+    def __init__(self, modelParam={}):
         self.modelParam = modelParam
         self.store = {}
     def test(self, Xi): # 测试集测试
