@@ -3,3 +3,4 @@
 MLQuant.egg-info/PKG-INFO
 *.log
 debug.log
+*.log
