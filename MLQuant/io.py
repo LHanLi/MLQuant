@@ -62,6 +62,7 @@ def loadDataFrame(
     output_root: str = "../data/raw",
     date_range: tuple[int, int] | None = None,
     curtime_range: tuple[int, int] | None = None,
+    columns: list[str] | None = None,
     max_workers: int | None = None
 ):
     """
@@ -72,6 +73,7 @@ def loadDataFrame(
     - output_root (str): Parquet 文件根目录。
     - date_range (tuple[int, int] or None): (start_date, end_date)，包含端点。例如 (20231201, 20231205)
     - curtime_range (tuple[int, int] or None): (start_time, end_time)，包含端点。例如 (93000, 150000)
+    - 读取列
     - max_workers (int or None): 并发线程数，默认自动设置。
     
     Returns:
@@ -131,7 +133,7 @@ def loadDataFrame(
         return pd.DataFrame()  # 返回空 DataFrame
 
     def _read_file(file_path):
-        return pq.read_table(file_path).to_pandas()
+        return pq.read_table(file_path, columns=columns).to_pandas()
 
     # 并发读取
     dfs = []
