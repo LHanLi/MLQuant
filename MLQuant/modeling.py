@@ -73,12 +73,12 @@ class Modeling():
             trainPreStart = tradeDates[max(tradeDates.index(trainStart)\
                 +1-self.param["trainParam"]["windowLen"], 0)] # 闭区间共windowLen天
             rollingWindow.append([trainPreStart, trainStart, trainEnd, testPreStart, testStart, testEnd])    
+        self.tradeDates = tradeDates
+        self.rollingWindow = rollingWindow
         self.log(f"滚动窗口划分:\n" + " "*35 + f"{("\n"+" "*35).join("第"+str(i+1)+"滑动窗口 "+
             "train:"+str(rollingWindow[i][0])+"-"+str(rollingWindow[i][1])+"-"+str(rollingWindow[i][2])+
             ", test:"+str(rollingWindow[i][3])+"-"+str(rollingWindow[i][4])+"-"+str(rollingWindow[i][5]) \
                     for i in range(len(rollingWindow)))}")
-        self.tradeDates = tradeDates
-        self.rollingWindow = rollingWindow
     def loadData(self):
         # 包含元素1/2...表示对应滚动窗口的训练数据加载完毕,包含0表示全部数据加载完毕
         self.dataFinished = []
@@ -107,7 +107,7 @@ class Modeling():
                 self.data = pd.concat([self.data, feature.merge(predict[["date", "curTime", "symbol", \
                     self.param["trainParam"]["predictLabel"]]], on=["date", "curTime", "symbol"])]).\
                         sort_values(by=["date", "curTime", "symbol"]).reset_index(drop=True)  
-            self.log(f"当前全部数据:{self.data.shape}, date:{self.data["date"].min()}-{self.data["date"].max()}, "+
+            self.log(f"第{i+1}次数据加载完成,当前全部数据:{self.data.shape}, date:{self.data["date"].min()}-{self.data["date"].max()}, "+
                    f"curTime:{self.data["curTime"].min()}-{self.data["curTime"].max()}") # 数据全局有效，索引固定
             if i==len(self.rollingWindow):
                 self.dataFinished.append(0)
@@ -142,7 +142,6 @@ class Modeling():
         else:
             self.log(f"特征筛选器选取{",".join(featureNames)}, 共{len(featureNames)}个因子")
     
-        self.log("获取训练集")
         Xi, Yi, predictIndex = self.getTensor(featureNames, trainPreStart, trainStart, trainEnd)
         if ~self.param["trainParam"]["tensor"]: # 如果关闭张量模式则转化为DataFrame
             Xi = pd.DataFrame(Xi.reshape(Xi.shape[0], -1))
@@ -224,6 +223,7 @@ class Modeling():
         MLQ.io.saveDataFrame(df_test[(df_test["date"]>=testStart)&(df_test["date"]<=testEnd)], os.path.join(self.param["trainParam"]["outPath"], "result"))
         model.saveModel(modelLoc)
     def report(self):
+        self.log("开始评价result")
         result = MLQ.io.loadDataFrame(os.path.join(self.param["trainParam"]["outPath"], "result")).sort_values(by=["date", "curTime", "symbol"])
         ICdate = result.groupby("date")[[self.param["trainParam"]["predictLabel"], "predict"]].corr().iloc[0::2, 1].reset_index(level=1, drop=True)
         plt, fig, ax = MLQ.post.matplot()
