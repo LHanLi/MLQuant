@@ -10,17 +10,6 @@ class fixFilter(Filter):
     def filtFeature(self, data):
         return self.featureParam['featureName']
 
-
-
-# 选取全部特征
-class typeFilter(Filter):
-    def filtFeature(self, data):
-        numeric_features = data.columns.tolist()
-        if self.featureParam.get("includeTime", False):
-            return numeric_features 
-        else:
-            return [c for c in numeric_features if c not in ["date", "curTime"]]
-
 # 按数据类型选取特征
 class typeFilter(Filter):
     """
@@ -81,12 +70,12 @@ import lightgbm as lgb
 class lgbModel(Model):
     def train(self, Xi, Yi):
         import pandas as pd
-        from pandas.api.types import is_categorical_dtype, is_bool_dtype
     
         Xi = Xi.copy()
         Yi = Yi.astype("float32")
     
         # 识别类别特征：bool 和 category 类型
+        from pandas.api.types import is_categorical_dtype, is_bool_dtype
         categorical_features = []
         for col in Xi.columns:
             if is_bool_dtype(Xi[col]):
@@ -114,7 +103,7 @@ class lgbModel(Model):
             min_gain_to_split=self.modelParam.get("min_gain_to_split", 0),
             subsample=self.modelParam.get('subsample', 0.8),
             colsample_bytree=self.modelParam.get('colsample_bytree', 0.6),
-            n_jobs=self.modelParam.get("n_jobs", 8),
+            n_jobs=self.modelParam.get("n_jobs", 20),
             random_state=self.modelParam.get("random_state", 42),
             verbose=-1
         )
@@ -126,7 +115,19 @@ class lgbModel(Model):
             cat_feat_lgb = None  # 或 []
     
         self.model.fit(Xi, Yi, categorical_feature=cat_feat_lgb)
-        super().evaluate(Xi, Yi)
     def predict(self, Xi):
+        # 识别类别特征：bool 和 category 类型
+        from pandas.api.types import is_categorical_dtype, is_bool_dtype
+        categorical_features = []
+        for col in Xi.columns:
+            if is_bool_dtype(Xi[col]):
+                # 转为 category（LightGBM 推荐格式）
+                Xi[col] = Xi[col].astype('category')
+                categorical_features.append(col)
+            elif is_categorical_dtype(Xi[col]):
+                categorical_features.append(col)
+            else:
+                # 确保其他列为数值型
+                Xi[col] = pd.to_numeric(Xi[col], errors='coerce').astype('float32')
         return self.model.predict(Xi)
     
