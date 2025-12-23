@@ -10,13 +10,19 @@ class Modeling():
         self.data = data
         self.Filter = Filter
         self.Model = Model 
-        self.dataFinished = set()
+        self.dataFinished = []
     # 构建模型主流程 
     def main(self):
         self.prepare()
-        # 启动异步数据加载线程
-        loader_thread = threading.Thread(target=self.loadData, daemon=True)
-        loader_thread.start()
+        if self.data is None:# 启动异步数据加载线程
+            loader_thread = threading.Thread(target=self.loadData, daemon=True)
+            loader_thread.start()
+        else:
+            if (self.data["date"].min()==self.rollingWindow[0][0])&(self.data["date"].max()==self.rollingWindow[-1][-1]):
+                for i in range(len(self.rollingWindow)+1):
+                    self.dataFinished.append(i) # 全部数据标记为已读
+            else:
+                raise ValueError("数据不匹配trainParam")
         for processNumber in range(len(self.rollingWindow)):
             self.train(processNumber)
         for processNumber in range(len(self.rollingWindow)):
@@ -81,7 +87,6 @@ class Modeling():
                     for i in range(len(rollingWindow)))}")
     def loadData(self):
         # 包含元素1/2...表示对应滚动窗口的训练数据加载完毕,包含0表示全部数据加载完毕
-        self.dataFinished = []
         for i in range(len(self.rollingWindow)+1):
             if i==0:
                 loadStart = self.rollingWindow[i][0]
