@@ -1,3 +1,4 @@
+import numpy as np
 import pandas as pd
 from MLQuant.modeling import Filter, Model
 
@@ -64,6 +65,25 @@ class typeFilter(Filter):
 # ===== Model ======
 # ===================
 
+# modelParam = {"selectModel":"MLQuant.sample.elaModel"}
+class elaModel(Model):
+    def train(self, Xi, Yi):
+        from sklearn.linear_model import ElasticNet
+        from sklearn.linear_model import LinearRegression
+        alpha = self.modelParam.get('alpha', 1e-4)
+        l1_ratio = self.modelParam.get("l1_ratio", 0.5)
+        intercept = self.modelParam.get('intercept', False)
+        # 模型训练
+        if alpha==0:
+            model = LinearRegression(fit_intercept=intercept, n_jobs=-1)
+        else:
+            model = ElasticNet(alpha=alpha, l1_ratio=l1_ratio, fit_intercept=intercept)
+        self.model = model.fit(Xi, Yi)
+        self.store['nonZeroRatio'] = (self.model.coef_!=0).mean()
+    def predict(self, Xi):
+        return self.model.predict(Xi)
+
+# modelParam = {"selectModel":"MLQuant.sample.lgbModel"}
 import lightgbm as lgb
 class lgbModel(Model):
     def train(self, Xi, Yi):
@@ -125,3 +145,8 @@ class lgbModel(Model):
                 Xi[col] = pd.to_numeric(Xi[col], errors='coerce').astype('float32')
         return self.model.predict(Xi)
     
+
+
+
+
+
