@@ -120,7 +120,6 @@ class lgbModel(Model):
         else:
             cat_feat_lgb = None  # 或 [] 
         self.model.fit(Xi, Yi, categorical_feature=cat_feat_lgb)
-        super().evaluate(Xi, Yi)
     def predict(self, Xi):
         # 识别类别特征：bool 和 category 类型
         from pandas.api.types import is_categorical_dtype, is_bool_dtype
