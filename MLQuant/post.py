@@ -20,7 +20,7 @@ def matplot(r=1, c=1, sharex=False, sharey=False, w=13, d=7, hspace=0.3, wspace=
     plt.rcParams['axes.grid']=True
     plt.rcParams['grid.linestyle']='--'
     plt.rcParams['grid.linewidth']=0.2
-    plt.rcParams["savefig.transparent"]='True'
+    #plt.rcParams["savefig.transparent"]='True'
     plt.rcParams['lines.linewidth']=0.8
     plt.rcParams['lines.markersize'] = 1
     
