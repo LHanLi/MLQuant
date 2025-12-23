@@ -10,17 +10,6 @@ class fixFilter(Filter):
     def filtFeature(self, data):
         return self.featureParam['featureName']
 
-
-
-# 选取全部特征
-class typeFilter(Filter):
-    def filtFeature(self, data):
-        numeric_features = data.columns.tolist()
-        if self.featureParam.get("includeTime", False):
-            return numeric_features 
-        else:
-            return [c for c in numeric_features if c not in ["date", "curTime"]]
-
 # 按数据类型选取特征
 class typeFilter(Filter):
     """
