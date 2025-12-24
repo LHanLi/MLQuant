@@ -6,7 +6,11 @@ import json, pickle, time, threading, glob, os
 
 class Modeling():
     def __init__(self, param, data=None, Filter=None, Model=None):
-        self.param = param
+        if type(param)==type("outPath"):
+            self.param = MLQ.io.readjson(os.path.join(param, "report", "param.json"))
+            self.param["trainParam"]["outPath"] = param
+        else:
+            self.param = param
         self.data = data
         self.Filter = Filter
         self.Model = Model 
@@ -28,34 +32,6 @@ class Modeling():
         for processNumber in range(len(self.rollingWindow)):
             self.test(processNumber)
         self.report()
-    # 返回B*T*m张量,B个legalData,回看窗口是T,m个特征(注意，回看窗口中可以包含illegal)
-    def getTensor(self, featureNames, datePreStart, dateStart, dateEnd):
-        # 如果特征列包含date, curTime, symbol索引列 需要重命名
-        for c in ["date", "curTime", "symbol"]:
-            if c in featureNames:
-                self.data[c+"1"] = self.data[c]
-        featureNames = [c if c not in ["date", "curTime", "symbol"] else c+"1" for c in featureNames]
-        # 获取包含时序信息的特征张量
-        predictIndex = self.data[(self.data["date"]>=dateStart)&\
-            (self.data["date"]<=dateEnd)&self.data["legalData"]].index
-        featureIndex = self.data[(self.data["date"]>=datePreStart)&\
-            (self.data["date"]<=dateEnd)].index
-        # 预测目标值
-        Yi = np.array(self.data.iloc[predictIndex]\
-            [self.param["trainParam"]["predictLabel"]]).reshape(-1, 1)
-        # 特征数据图片 batch*seq*featureSize
-        Xi_shift = self.data.iloc[featureIndex][["date", "curTime", "symbol"]+featureNames].set_index(\
-            ['date', "curTime", 'symbol']) # 回看窗口为连续分钟,index去掉curTime则只取过去T个date
-        Xi = np.array(Xi_shift).reshape(-1, 1, len(Xi_shift.columns))
-        for i in range(self.param["trainParam"]["windowLen"]-1):
-            Xi_shift = Xi_shift.groupby('symbol').shift().fillna(0) # 如果数据不足windowLen则补0
-            Xi = np.concatenate(\
-                (np.array(Xi_shift).reshape(-1, 1, len(Xi_shift.columns)), Xi), axis=1)
-        Xi = Xi[[i-predictIndex[-1]-1 for i in predictIndex]] # 提取和Yi对应的特征张量
-        return Xi, Yi, predictIndex
-    # log函数
-    def log(self, logstr):
-        MLQ.io.log(logstr, logLoc=self.param["trainParam"]["outPath"])
     # 创建工作目录,构建滑动窗口
     def prepare(self):
         # 模型构建在此目录构建
@@ -147,7 +123,7 @@ class Modeling():
         else:
             self.log(f"特征筛选器选取{",".join(featureNames)}, 共{len(featureNames)}个因子")
     
-        Xi, Yi, predictIndex = self.getTensor(featureNames, trainPreStart, trainStart, trainEnd)
+        Xi, Yi, predictIndex = self.getTensor(self.data, featureNames, trainPreStart, trainStart, trainEnd)
         if ~self.param["trainParam"]["tensor"]: # 如果关闭张量模式则转化为DataFrame
             Xi = pd.DataFrame(Xi.reshape(Xi.shape[0], -1))
             Yi = pd.DataFrame(Yi.reshape(Yi.shape[0], -1))
@@ -175,21 +151,14 @@ class Modeling():
             time.sleep(10)
         trainPreStart, trainStart, trainEnd, testPreStart, testStart, testEnd = self.rollingWindow[processNumber]
         self.log(f"开始读取第{processNumber+1}个滑动窗口已训练模型")
+        # 读取该滑动窗口对应的特征筛选器及模型
         modelLoc = os.path.join(self.param["trainParam"]["outPath"], "model", f"{testStart}_startTest", f"{self.data["curTime"].min()}_{self.data["curTime"].max()}")
-        if self.Filter is None:
-            filter = MLQ.io.importMyClass(self.param["featureParam"]["selectFilter"])(self.param["featureParam"])
-        else:
-            filter = self.Filter(self.param["featureParam"]) 
-        filter.restoreFilter(modelLoc)
-        if self.Model is None:
-            model = MLQ.io.importMyClass(self.param["modelParam"]["selectModel"])(self.param["modelParam"])
-        else:
-            model = self.Model(self.param["modelParam"])
-        model.restoreModel(modelLoc) 
+        filter = self.restoreFilter(modelLoc)
+        model = self.restoreModel(modelLoc)
         df_train = pd.DataFrame(model.store["train"])
         self.log("全部数据已加载完毕,测试模型")
         # 所有模型测试从该滑动窗口测试集开始到最后一个滑动窗口测试集最后时间
-        Xi_test, Yi_test, predictIndex_test = self.getTensor(filter.store["featureNames"], testPreStart, testStart, self.rollingWindow[-1][-1])
+        Xi_test, Yi_test, predictIndex_test = self.getTensor(self.data, filter.store["featureNames"], testPreStart, testStart, self.rollingWindow[-1][-1])
         if ~self.param["trainParam"]["tensor"]:
             Xi_test = pd.DataFrame(Xi_test.reshape(Xi_test.shape[0], -1))
             Yi_test = pd.DataFrame(Yi_test.reshape(Yi_test.shape[0], -1))
@@ -227,6 +196,7 @@ class Modeling():
         model.store["test"] = df_test.to_dict()
         MLQ.io.saveDataFrame(df_test[(df_test["date"]>=testStart)&(df_test["date"]<=testEnd)], os.path.join(self.param["trainParam"]["outPath"], "result"))
         model.saveModel(modelLoc)
+    # 训练完毕后生成模型报告
     def report(self):
         self.log("开始评价result")
         result = MLQ.io.loadDataFrame(os.path.join(self.param["trainParam"]["outPath"], "result")).sort_values(by=["date", "curTime", "symbol"])
@@ -236,7 +206,65 @@ class Modeling():
         ax.set_title(f"IC:{100*ICdate.mean():.2f}, ICIR:{(ICdate.mean()/ICdate.std()):.2f}, "\
                 f"rollingICIR:{(ICdate.rolling(5).mean().mean()/ICdate.rolling(5).mean().std()):.2f}")
         plt.savefig(os.path.join(self.param["trainParam"]["outPath"], "report", "IC.png"))
-
+    # 加载模型(包括特征筛选器)
+    def restoreFilter(self, modelLoc):
+        if self.Filter is None:
+            filter = MLQ.io.importMyClass(self.param["featureParam"]["selectFilter"])(self.param["featureParam"])
+        else:
+            filter = self.Filter(self.param["featureParam"]) 
+        filter.restoreFilter(modelLoc)
+        return filter
+    def restoreModel(self, modelLoc):
+        if self.Model is None:
+            model = MLQ.io.importMyClass(self.param["modelParam"]["selectModel"])(self.param["modelParam"])
+        else:
+            model = self.Model(self.param["modelParam"])
+        model.restoreModel(modelLoc) 
+        return model
+    # 实盘调用模型预测数据(注意，默认使用最新模型，会自动丢弃legalData为False的数据)
+    def predict(self, data):
+        # 读取最新模型
+        modelLoc = os.path.join(self.param["trainParam"]["outPath"], "model")
+        modelLoc = os.path.join(modelLoc, os.listdir(modelLoc)[-1], f"{data["curTime"].min()}_{data["curTime"].max()}")
+        filter = self.restoreFilter(modelLoc) 
+        model = self.restoreModel(modelLoc)
+        Xi, Yi, predictIndex = self.getTensor(data, filter.store["featureNames"], data["date"].unique()[0],\
+            data["date"].unique()[self.param["trainParam"]["windowLen"]-1], data["date"].unique()[-1], False)
+        if ~self.param["trainParam"]["tensor"]:
+            Xi = pd.DataFrame(Xi.reshape(Xi.shape[0], -1))
+            #Yi = pd.DataFrame(Yi.reshape(Yi.shape[0], -1))
+        return predictIndex, model.predict(Xi)
+    # 返回B*T*m张量,B是legalData数量,回看窗口是T,m个特征(注意，回看窗口中可以包含illegal)
+    def getTensor(self, data, featureNames, datePreStart, dateStart, dateEnd, predict=True):
+        # 如果特征列包含date, curTime, symbol索引列 需要重命名
+        for c in ["date", "curTime", "symbol"]:
+            if c in featureNames:
+                data[c+"1"] = data[c]
+        featureNames = [c if c not in ["date", "curTime", "symbol"] else c+"1" for c in featureNames]
+        # 获取包含时序信息的特征张量
+        predictIndex = data[(data["date"]>=dateStart)&\
+            (data["date"]<=dateEnd)&data["legalData"]].index
+        featureIndex = data[(data["date"]>=datePreStart)&\
+            (data["date"]<=dateEnd)].index
+        # 预测目标值
+        if predict:
+            Yi = np.array(data.iloc[predictIndex]\
+                [self.param["trainParam"]["predictLabel"]]).reshape(-1, 1)
+        else:
+            Yi = None
+        # 特征数据图片 batch*seq*featureSize
+        Xi_shift = data.iloc[featureIndex][["date", "curTime", "symbol"]+featureNames].set_index(\
+            ['date', "curTime", 'symbol']) # 回看窗口为连续分钟,index去掉curTime则只取过去T个date
+        Xi = np.array(Xi_shift).reshape(-1, 1, len(Xi_shift.columns))
+        for i in range(self.param["trainParam"]["windowLen"]-1):
+            Xi_shift = Xi_shift.groupby('symbol').shift().fillna(0) # 如果数据不足windowLen则补0
+            Xi = np.concatenate(\
+                (np.array(Xi_shift).reshape(-1, 1, len(Xi_shift.columns)), Xi), axis=1)
+        Xi = Xi[[i-predictIndex[-1]-1 for i in predictIndex]] # 提取和Yi对应的特征张量
+        return Xi, Yi, predictIndex
+    # log函数
+    def log(self, logstr):
+        MLQ.io.log(logstr, logLoc=self.param["trainParam"]["outPath"])
 
 
 # ==============================
