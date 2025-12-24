@@ -57,7 +57,7 @@ class Modeling():
             rollingWindow.append([trainPreStart, trainStart, trainEnd, testPreStart, testStart, testEnd])    
         self.tradeDates = tradeDates
         self.rollingWindow = rollingWindow
-        self.log(f"滚动窗口划分:\n" + " "*35 + f"{("\n"+" "*35).join("第"+str(i+1)+"滑动窗口 "+
+        self.log(f"prepare,滚动窗口划分:\n" + " "*35 + f"{("\n"+" "*35).join("第"+str(i+1)+"滑动窗口 "+
             "train:"+str(rollingWindow[i][0])+"-"+str(rollingWindow[i][1])+"-"+str(rollingWindow[i][2])+
             ", test:"+str(rollingWindow[i][3])+"-"+str(rollingWindow[i][4])+"-"+str(rollingWindow[i][5]) \
                     for i in range(len(rollingWindow)))}")
@@ -67,15 +67,15 @@ class Modeling():
             if i==0:
                 loadStart = self.rollingWindow[i][0]
                 loadEnd = self.rollingWindow[i][2]
-                self.log(f"加载第1个滚动窗口训练所需数据,{loadStart}-{loadEnd}")
+                self.log(f"loadData,加载第1个滚动窗口训练所需数据,{loadStart}-{loadEnd}")
             elif i==len(self.rollingWindow): 
                 loadStart = max(self.rollingWindow[-1][0], [d for d in self.tradeDates if d>self.rollingWindow[i-1][2]][0])
                 loadEnd = self.rollingWindow[-1][-1]
-                self.log(f"加载全部剩余未加载数据,{loadStart}-{loadEnd}")
+                self.log(f"loadData,加载全部剩余未加载数据,{loadStart}-{loadEnd}")
             else: 
                 loadStart = max(self.rollingWindow[i][0], [d for d in self.tradeDates if d>self.rollingWindow[i-1][2]][0])
                 loadEnd = self.rollingWindow[i][2]
-                self.log(f"加载第{i+1}个滚动窗口训练所需未加载数据,{loadStart}-{loadEnd}")
+                self.log(f"loadData,加载第{i+1}个滚动窗口训练所需未加载数据,{loadStart}-{loadEnd}")
             feature = MLQ.io.loadDataFrame(self.param["trainParam"]["featureDir"], \
                 (loadStart, loadEnd), (93000000, 150000000))
             predict = MLQ.io.loadDataFrame(self.param["trainParam"]["predictDir"], \
@@ -88,7 +88,7 @@ class Modeling():
                 self.data = pd.concat([self.data, feature.merge(predict[["date", "curTime", "symbol", \
                     self.param["trainParam"]["predictLabel"]]], on=["date", "curTime", "symbol"])]).\
                         sort_values(by=["date", "curTime", "symbol"]).reset_index(drop=True)  
-            self.log(f"第{i+1}次数据加载完成,当前全部数据:{self.data.shape}, date:{self.data["date"].min()}-{self.data["date"].max()}, "+
+            self.log(f"loadData,第{i+1}次数据加载完成,当前全部数据:{self.data.shape}, date:{self.data["date"].min()}-{self.data["date"].max()}, "+
                    f"curTime:{self.data["curTime"].min()}-{self.data["curTime"].max()}") # 数据全局有效，索引固定
             if i==len(self.rollingWindow):
                 self.dataFinished.append(0)
@@ -98,16 +98,16 @@ class Modeling():
     def train(self, processNumber):
         trainPreStart, trainStart, trainEnd, testPreStart, testStart, testEnd = self.rollingWindow[processNumber]
         while (processNumber+1) not in self.dataFinished:
-            self.log(f"第{processNumber+1}个滚动窗口训练所需数据未完全加载,等待10s")
+            self.log(f"train,第{processNumber+1}个滚动窗口训练所需数据未完全加载,等待10s")
             time.sleep(10)
-        self.log(f"第{processNumber+1}滚动窗口train({trainPreStart}-{trainStart}-{trainEnd})数据已加载完毕,开始train")
+        self.log(f"train,第{processNumber+1}滚动窗口train({trainPreStart}-{trainStart}-{trainEnd})数据已加载完毕,开始train")
         # 创建该滑动窗口模型存储文件夹
         modelLoc = os.path.join(self.param["trainParam"]["outPath"], "model", f"{testStart}_startTest", f"{self.data["curTime"].min()}_{self.data["curTime"].max()}")
         os.makedirs(modelLoc, exist_ok=True)
         if "model.pkl" in os.listdir(modelLoc):
-            self.log(f"第{processNumber+1}滚动窗口train已完成,跳过")
+            self.log(f"train,第{processNumber+1}滚动窗口train已完成,跳过")
             return
-        self.log("实例化Filter")
+        self.log("train,实例化Filter")
         if self.Filter is None:
             filter = MLQ.io.importMyClass(self.param["featureParam"]["selectFilter"])(self.param["featureParam"])
         else:
@@ -119,17 +119,15 @@ class Modeling():
         filter.store["featureNames"] = featureNames
         filter.saveFilter(modelLoc)
         if len(featureNames)>10:
-            self.log(f"特征筛选器选取{",".join(featureNames[:10])}, 等共{len(featureNames)}个因子")
+            self.log(f"train,特征筛选器选取{",".join(featureNames[:10])}, 等共{len(featureNames)}个因子")
         else:
-            self.log(f"特征筛选器选取{",".join(featureNames)}, 共{len(featureNames)}个因子")
+            self.log(f"train,特征筛选器选取{",".join(featureNames)}, 共{len(featureNames)}个因子")
     
         Xi, Yi, predictIndex = self.getTensor(self.data, featureNames, trainPreStart, trainStart, trainEnd)
         if ~self.param["trainParam"]["tensor"]: # 如果关闭张量模式则转化为DataFrame
             Xi = pd.DataFrame(Xi.reshape(Xi.shape[0], -1))
             Yi = pd.DataFrame(Yi.reshape(Yi.shape[0], -1))
-        MLQ.io.log(f"得到训练集特征张量维度:{Xi.shape}", logLoc=self.param["trainParam"]["outPath"])
-    
-        self.log("实例化Model")
+        self.log(f"train,得到训练集特征张量维度:{Xi.shape},实例化Model") 
         if self.Model is None:
             model = MLQ.io.importMyClass(self.param["modelParam"]["selectModel"])(self.param["modelParam"])
         else:
@@ -137,32 +135,31 @@ class Modeling():
         # 模型训练
         model.train(Xi, Yi)
         model.store["window"] = self.rollingWindow[processNumber]
-        self.log("模型训练完毕")
+        self.log("train,模型训练完毕,保存模型及训练集结果")
         df_train = self.data.iloc[predictIndex][["date", "curTime", "symbol", \
             self.param["trainParam"]["predictLabel"]]]
         df_train["predict"] = model.predict(Xi)
         model.store["train"] = df_train.to_dict()
         model.saveModel(modelLoc)
-        self.log("保存模型训练集结果")
     # 模型评价
     def test(self, processNumber):
         while 0 not in self.dataFinished:
-            self.log("测试所需数据完全加载,等待10s")
+            self.log("test,测试所需数据完全加载,等待10s")
             time.sleep(10)
         trainPreStart, trainStart, trainEnd, testPreStart, testStart, testEnd = self.rollingWindow[processNumber]
-        self.log(f"开始读取第{processNumber+1}个滑动窗口已训练模型")
+        self.log(f"test,开始读取第{processNumber+1}个滑动窗口已训练模型")
         # 读取该滑动窗口对应的特征筛选器及模型
         modelLoc = os.path.join(self.param["trainParam"]["outPath"], "model", f"{testStart}_startTest", f"{self.data["curTime"].min()}_{self.data["curTime"].max()}")
         filter = self.restoreFilter(modelLoc)
         model = self.restoreModel(modelLoc)
         df_train = pd.DataFrame(model.store["train"])
-        self.log("全部数据已加载完毕,测试模型")
+        self.log("test,全部数据已加载完毕,测试模型")
         # 所有模型测试从该滑动窗口测试集开始到最后一个滑动窗口测试集最后时间
         Xi_test, Yi_test, predictIndex_test = self.getTensor(self.data, filter.store["featureNames"], testPreStart, testStart, self.rollingWindow[-1][-1])
         if ~self.param["trainParam"]["tensor"]:
             Xi_test = pd.DataFrame(Xi_test.reshape(Xi_test.shape[0], -1))
             Yi_test = pd.DataFrame(Yi_test.reshape(Yi_test.shape[0], -1))
-        self.log(f"得到测试数据{Xi_test.shape}")
+        self.log(f"test,得到测试数据{Xi_test.shape}")
         df_test = self.data.iloc[predictIndex_test][["date", "curTime", "symbol",\
             self.param["trainParam"]["predictLabel"]]]
         df_test["predict"] = model.predict(Xi_test) 
@@ -192,13 +189,13 @@ class Modeling():
                         f"rollingICIR:{(ICdate_test.rolling(5).mean().mean()/ICdate_test.rolling(5).mean().std()):.2f}")
         ax[1][1].set_xlabel(f'从{df_test['date'].iloc[0]}到{df_test['date'].iloc[-1]}')
         plt.savefig(os.path.join(modelLoc, "predict.png"))
-        self.log("保存模型及测试结果")
+        self.log("test,保存模型及测试结果")
         model.store["test"] = df_test.to_dict()
         MLQ.io.saveDataFrame(df_test[(df_test["date"]>=testStart)&(df_test["date"]<=testEnd)], os.path.join(self.param["trainParam"]["outPath"], "result"))
         model.saveModel(modelLoc)
     # 训练完毕后生成模型报告
     def report(self):
-        self.log("开始评价result")
+        self.log("report,开始评价result")
         result = MLQ.io.loadDataFrame(os.path.join(self.param["trainParam"]["outPath"], "result")).sort_values(by=["date", "curTime", "symbol"])
         ICdate = result.groupby("date")[[self.param["trainParam"]["predictLabel"], "predict"]].corr().iloc[0::2, 1].reset_index(level=1, drop=True)
         plt, fig, ax = MLQ.post.matplot()
