@@ -59,7 +59,11 @@ class typeFilter(Filter):
             time_columns_to_exclude = {"date", "curTime", "symbol", "legalData"}
             selected_cols = [col for col in selected_cols if col not in time_columns_to_exclude]
 
-        return selected_cols
+        if "randomSelect" in self.featureParam.keys():
+            import random
+            return random.sample(selected_cols, self.featureParam["randomSelect"])
+        else:
+            return selected_cols
 
 # ===================
 # ===== Model ======
