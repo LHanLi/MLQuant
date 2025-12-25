@@ -287,8 +287,7 @@ class Filter:
 # 模型基类
 # ==============================
 class Model:
-    def __init__(self, featureName=[], modelParam={}):
-        self.featureName = featureName
+    def __init__(self, modelParam={}):
         self.modelParam = modelParam
         self.store = {}
     def saveModel(self, modelDir): # 储存模型
