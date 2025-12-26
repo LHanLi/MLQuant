@@ -57,8 +57,8 @@ class Modeling():
             rollingWindow.append([trainPreStart, trainStart, trainEnd, testPreStart, testStart, testEnd])    
         self.tradeDates = tradeDates
         self.rollingWindow = rollingWindow
-        self.log(f"prepare,滚动窗口划分:\n" + " "*35 + f"{("\n"+" "*35).join("第"+str(i+1)+"滑动窗口 "+
-            "train:"+str(rollingWindow[i][0])+"-"+str(rollingWindow[i][1])+"-"+str(rollingWindow[i][2])+
+        self.log(f"prepare,滚动窗口划分:\n" + " "*35 + f"{("\n"+" "*35).join("第"+str(i+1)+"滑动窗口 "+\
+            "train:"+str(rollingWindow[i][0])+"-"+str(rollingWindow[i][1])+"-"+str(rollingWindow[i][2])+\
             ", test:"+str(rollingWindow[i][3])+"-"+str(rollingWindow[i][4])+"-"+str(rollingWindow[i][5]) \
                     for i in range(len(rollingWindow)))}")
     def loadData(self):
