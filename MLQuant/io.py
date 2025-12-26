@@ -55,8 +55,8 @@ def saveDataFrame(df, output_root = "../data/raw", max_workers: int = None):
             # 可在此添加日志或异常处理
             future.result()  # 触发潜在异常
 
-    print(f"Successfully wrote df({df.shape}, {len(df["date"].unique())}dates, "\
-          f"{len(df["curTime"].unique())}curTimes) to '{output_root}'")
+    print(f"Successfully wrote df({df.shape}, {len(df['date'].unique())}dates, "\
+          f"{len(df['curTime'].unique())}curTimes) to '{output_root}'")
 # 加载saveDataFrame存储的数据
 def loadDataFrame(
     output_root: str = "../data/raw",
