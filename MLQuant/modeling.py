@@ -125,9 +125,9 @@ class Modeling():
         filter.store["featureNames"] = featureNames
         filter.saveFilter(modelLoc)
         if len(featureNames)>10:
-            self.log(f"train,特征筛选器选取{",".join(featureNames[:10])}, 等共{len(featureNames)}个因子")
+            self.log(f"train,特征筛选器选取{','.join(featureNames[:10])}, 等共{len(featureNames)}个因子")
         else:
-            self.log(f"train,特征筛选器选取{",".join(featureNames)}, 共{len(featureNames)}个因子")
+            self.log(f"train,特征筛选器选取{','.join(featureNames)}, 共{len(featureNames)}个因子")
     
         Xi, Yi, predictIndex = self.getTensor(self.data, featureNames, trainPreStart, trainStart, trainEnd)
         if ~self.param["trainParam"]["tensor"]: # 如果关闭张量模式则转化为DataFrame
