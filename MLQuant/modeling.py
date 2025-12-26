@@ -93,9 +93,9 @@ class Modeling():
             else:
                 self.data = pd.concat([self.data, feature.merge(predict[["date", "curTime", "symbol", \
                     self.param["trainParam"]["predictLabel"]]], on=["date", "curTime", "symbol"])]).\
-                        sort_values(by=["date", "curTime", "symbol"]).reset_index(drop=True)  
-            self.log(f"loadData,第{i+1}次数据加载完成,当前全部数据:{self.data.shape}, date:{self.data["date"].min()}-{self.data["date"].max()}, "+
-                   f"curTime:{self.data["curTime"].min()}-{self.data["curTime"].max()}") # 数据全局有效，索引固定
+                        sort_values(by=["date", "curTime", "symbol"]).reset_index(drop=True)
+            self.log(f"loadData,第{i+1}次数据加载完成,当前全部数据:{self.data.shape}, date:{self.data['date'].min()}-{self.data['date'].max()}, "+
+                   f"curTime:{self.data['curTime'].min()}-{self.data['curTime'].max()}") # 数据全局有效，索引固定
             if i==len(self.rollingWindow):
                 self.dataFinished.append(0)
             else:
@@ -108,7 +108,7 @@ class Modeling():
             time.sleep(10)
         self.log(f"train,第{processNumber+1}滚动窗口train({trainPreStart}-{trainStart}-{trainEnd})数据已加载完毕,开始train")
         # 创建该滑动窗口模型存储文件夹
-        modelLoc = os.path.join(self.param["trainParam"]["outPath"], "model", f"{testStart}_startTest", f"{self.data["curTime"].min()}_{self.data["curTime"].max()}")
+        modelLoc = os.path.join(self.param["trainParam"]["outPath"], "model", f"{testStart}_startTest", f"{self.data['curTime'].min()}_{self.data['curTime'].max()}")
         os.makedirs(modelLoc, exist_ok=True)
         if "model.pkl" in os.listdir(modelLoc):
             self.log(f"train,第{processNumber+1}滚动窗口train已完成,跳过")
@@ -155,7 +155,7 @@ class Modeling():
         trainPreStart, trainStart, trainEnd, testPreStart, testStart, testEnd = self.rollingWindow[processNumber]
         self.log(f"test,开始读取第{processNumber+1}个滑动窗口已训练模型")
         # 读取该滑动窗口对应的特征筛选器及模型
-        modelLoc = os.path.join(self.param["trainParam"]["outPath"], "model", f"{testStart}_startTest", f"{self.data["curTime"].min()}_{self.data["curTime"].max()}")
+        modelLoc = os.path.join(self.param["trainParam"]["outPath"], "model", f"{testStart}_startTest", f"{self.data['curTime'].min()}_{self.data['curTime'].max()}")
         filter = self.restoreFilter(modelLoc)
         model = self.restoreModel(modelLoc)
         df_train = pd.DataFrame(model.store["train"])
@@ -189,11 +189,11 @@ class Modeling():
         ax[1][0].plot(ICdate_train.cumsum().values)
         ax[1][0].set_title(f"IC:{100*ICdate_train.mean():.2f}, ICIR:{(ICdate_train.mean()/ICdate_test.std()):.2f}, "\
                         f"rollingICIR:{(ICdate_train.rolling(5).mean().mean()/ICdate_train.rolling(5).mean().std()):.2f}")
-        ax[1][0].set_xlabel(f'从{df_train['date'].iloc[0]}到{df_train['date'].iloc[-1]}')
+        ax[1][0].set_xlabel(f"从{df_train['date'].iloc[0]}到{df_train['date'].iloc[-1]}")
         ax[1][1].plot(ICdate_test.cumsum().values)
         ax[1][1].set_title(f"IC:{100*ICdate_test.mean():.2f}, ICIR:{(ICdate_test.mean()/ICdate_test.std()):.2f}, "\
                         f"rollingICIR:{(ICdate_test.rolling(5).mean().mean()/ICdate_test.rolling(5).mean().std()):.2f}")
-        ax[1][1].set_xlabel(f'从{df_test['date'].iloc[0]}到{df_test['date'].iloc[-1]}')
+        ax[1][1].set_xlabel(f"从{df_test['date'].iloc[0]}到{df_test['date'].iloc[-1]}")
         plt.savefig(os.path.join(modelLoc, "predict.png"))
         self.log("test,保存模型及测试结果")
         model.store["test"] = df_test.to_dict()
@@ -228,7 +228,7 @@ class Modeling():
     def predict(self, data):
         # 读取最新模型
         modelLoc = os.path.join(self.param["trainParam"]["outPath"], "model")
-        modelLoc = os.path.join(modelLoc, os.listdir(modelLoc)[-1], f"{data["curTime"].min()}_{data["curTime"].max()}")
+        modelLoc = os.path.join(modelLoc, os.listdir(modelLoc)[-1], f"{data['curTime'].min()}_{data['curTime'].max()}")
         filter = self.restoreFilter(modelLoc) 
         model = self.restoreModel(modelLoc)
         Xi, Yi, predictIndex = self.getTensor(data, filter.store["featureNames"], data["date"].unique()[0],\
