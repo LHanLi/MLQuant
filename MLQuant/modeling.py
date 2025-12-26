@@ -57,10 +57,16 @@ class Modeling():
             rollingWindow.append([trainPreStart, trainStart, trainEnd, testPreStart, testStart, testEnd])    
         self.tradeDates = tradeDates
         self.rollingWindow = rollingWindow
-        self.log(f"prepare,滚动窗口划分:\n" + " "*35 + f"{("\n"+" "*35).join("第"+str(i+1)+"滑动窗口 "+\
-            "train:"+str(rollingWindow[i][0])+"-"+str(rollingWindow[i][1])+"-"+str(rollingWindow[i][2])+\
-            ", test:"+str(rollingWindow[i][3])+"-"+str(rollingWindow[i][4])+"-"+str(rollingWindow[i][5]) \
-                    for i in range(len(rollingWindow)))}")
+        #self.log(f"prepare,滚动窗口划分:\n" + " "*35 + f"{("\n"+" "*35).join("第"+str(i+1)+"滑动窗口 "+\
+        #    "train:"+str(rollingWindow[i][0])+"-"+str(rollingWindow[i][1])+"-"+str(rollingWindow[i][2])+\
+        #    ", test:"+str(rollingWindow[i][3])+"-"+str(rollingWindow[i][4])+"-"+str(rollingWindow[i][5]) \
+        #            for i in range(len(rollingWindow)))}")
+        parts = [
+            f"第{i+1}滑动窗口 train:{rw[0]}-{rw[1]}-{rw[2]}, test:{rw[3]}-{rw[4]}-{rw[5]}"
+            for i, rw in enumerate(rollingWindow)
+        ]
+        msg = "prepare,滚动窗口划分:\n" + ("\n" + " " * 35).join(parts)
+        self.log(msg)
     def loadData(self):
         # 包含元素1/2...表示对应滚动窗口的训练数据加载完毕,包含0表示全部数据加载完毕
         for i in range(len(self.rollingWindow)+1):
