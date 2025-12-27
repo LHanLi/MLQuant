@@ -79,14 +79,14 @@ def plotPredict(result, ISStartDate, ISEndDate, OOSStartDate, OOSEndDate, namey,
     ax[1][0].set_title(f"IC:{100*datesicIS.mean():.2f}, ICIR:{(datesicIS.mean()/datesicIS.std()):.2f}, "\
                 f"rollingICIR:{(datesicIS.rolling(5).mean().mean()/datesicIS.rolling(5).mean().std()):.2f}")
     ax[1][0].set_ylabel('单截面累计IC')
-    ax[1][0].set_xlabel(f'从{df_IS['date'].iloc[0]}到{df_IS['date'].iloc[-1]}')
+    ax[1][0].set_xlabel(f"从{df_IS['date'].iloc[0]}到{df_IS['date'].iloc[-1]}")
     # 样本外
     ax[1][1].plot(datesicOOS.cumsum().values)
     ax11_twinx = ax[1][1].twinx()
     ax11_twinx.plot(datesicOOS.rolling(5).mean().values, c="C2")
     ax[1][1].set_title(f"IC:{100*datesicOOS.mean():.2f}, ICIR:{(datesicOOS.mean()/datesicOOS.std()):.2f}, "\
                 f"rollingICIR:{(datesicOOS.rolling(5).mean().mean()/datesicOOS.rolling(5).mean().std()):.2f}")
-    ax[1][1].set_xlabel(f'从{df_OOS['date'].iloc[0]}到{df_OOS['date'].iloc[-1]}')
+    ax[1][1].set_xlabel(f"从{df_OOS['date'].iloc[0]}到{df_OOS['date'].iloc[-1]}")
     return plt, fig, ax
 
 # 模型衰减
@@ -271,7 +271,7 @@ class Post():
         maxOnePosition = self.dailyPos.groupby("date")["marketValue"].max()/(dailyAlpha["value"]*1e8)
         meanOnePosition = self.dailyPos[self.dailyPos["marketValue"]!=0].groupby("date")["marketValue"].mean()/(dailyAlpha["value"]*1e8)
         ax[1][1].set_title(f"平均仓位: {100*totalPosition.mean():.2f}%, 最大单一持仓: {100*maxOnePosition.max():.2f}%, 日平均换手: {dailyAlpha['turnover'].mean():.2f}, \n"
-                        f"平均持仓只数: {int(self.dailyPos[self.dailyPos["marketValue"]!=0].groupby("date")["symbol"].count().mean())}, 平均持仓仓位: {100*meanOnePosition.mean():.2f}%")
+                        f"平均持仓只数: {int(self.dailyPos[self.dailyPos['marketValue']!=0].groupby('date')['symbol'].count().mean())}, 平均持仓仓位: {100*meanOnePosition.mean():.2f}%")
         ax[1][1].plot(totalPosition, c="C3")
         ax111 = ax[1][1].twinx()
         ax111.plot(maxOnePosition, c="C0")
