@@ -129,7 +129,7 @@ class lgbModel(Model):
         ) 
         if categorical_features:
             cat_feat_lgb = ["name:" + col for col in categorical_features]
-            print(f"类别因子:{",".join(cat_feat_lgb)}")
+            print(f"类别因子:{','.join(cat_feat_lgb)}")
         else:
             cat_feat_lgb = None  # 或 [] 
         self.model.fit(Xi, Yi, categorical_feature=cat_feat_lgb)
