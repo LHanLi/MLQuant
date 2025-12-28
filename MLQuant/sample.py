@@ -6,10 +6,10 @@ from MLQuant.modeling import Filter, Model
 # ===== Filter ======
 # ===================
 
-# 固定因子池，直接从featureParma['featureName']输入
+# 固定因子池，直接从featureParma['featureNames']输入
 class fixFilter(Filter):
     def filtFeature(self, data):
-        return self.featureParam['featureName']
+        return self.featureParam['featureNames']
 
 # 按数据类型选取特征
 class typeFilter(Filter):
@@ -151,6 +151,127 @@ class lgbModel(Model):
     
 
 
+class gruModel(Model):
+    import torch
+    class GRURegressor(torch.nn.Module):
+        def __init__(self, input_size, hidden_size, num_layers, output_size):
+            import torch
+            super().__init__()
+            self.input_size = input_size
+            self.hidden_size = hidden_size
+            self.num_layers = num_layers
+            self.output_size = output_size
+            self.gru = torch.nn.GRU(
+                input_size=input_size,
+                hidden_size=hidden_size,
+                num_layers=num_layers,
+                batch_first=True
+            )
+            self.fc = torch.nn.Linear(hidden_size, output_size)
+            total_params = sum(p.numel() for p in self.parameters() if p.requires_grad)
+            print(f"GRURegressor initialized with {total_params:,} trainable parameters")
+        def forward(self, x):
+            import torch
+            batch_size = x.size(0)
+            h_0 = torch.zeros(self.num_layers, batch_size, self.hidden_size).to(x.device)
+            output, _ = self.gru(x, h_0)
+            last_hidden = output[:, -1, :]  # (batch, hidden_size)
+            prediction = self.fc(last_hidden)  # (batch, output_size)
+            return prediction
+    def train(self, Xi, Yi):
+        import torch
+        from torch.utils.data import TensorDataset, random_split, DataLoader
+        # 划分训练集验证集
+        dataset = TensorDataset(Xi, Yi)
+        val_size = int(len(dataset)*self.modelParam.get("val_ratio", 0.05))
+        train_size = len(dataset) - val_size
+        train_dataset, val_dataset = random_split(
+            dataset, [train_size, val_size],
+            generator=torch.Generator().manual_seed(42))
+        # 按batchsize划分
+        batch_size = self.modelParam.get("batch_size", 2000)
+        train_loader = DataLoader(train_dataset, batch_size=batch_size, shuffle=True)
+        val_loader = DataLoader(val_dataset, batch_size=batch_size, shuffle=False)
+        # 确定训练进行设备
+        self.device = torch.device(self.modelParam.get("device", 'cuda' if torch.cuda.is_available() else 'cpu'))
+        print(f"在 {self.device} 上执行训练")
+        # 实例化模型
+        model = self.GRURegressor(
+            input_size=Xi.shape[2],
+            hidden_size=self.modelParam.get("hidden_size", 64),
+            num_layers=self.modelParam.get("num_layers", 2),
+            output_size=1
+        ).to(self.device)
+        # 损失函数
+        criterion = torch.nn.MSELoss()
+        # 优化器
+        optimizer = torch.optim.Adam(model.parameters(), lr=1e-3)
 
+        # ====== 早停相关参数 ======
+        patience = self.modelParam.get("patience", 10)        # 容忍多少个 epoch 没有 improvement
+        best_val_loss = float('inf')
+        epochs_no_improve = 0
+        early_stop = False
+        best_model_state = None     # 保存最佳模型权重
+        num_epochs = self.modelParam.get("num_epochs", 500)  # 可以设大一点，因为会早停
+        # 开始epoch循环
+        for epoch in range(num_epochs):
+            model.train()
+            train_loss = 0.0
+            for x_batch, y_batch in train_loader:
+                x_batch = x_batch.to(self.device)
+                y_batch = y_batch.to(self.device)
+                optimizer.zero_grad()
+                pred = model(x_batch)
+                loss = criterion(pred, y_batch)
+                loss.backward()
+                optimizer.step()
+                train_loss += loss.item() * x_batch.size(0)
+            train_loss /= len(train_loader.dataset)
+            # 验证阶段
+            model.eval()
+            val_loss = 0.0
+            with torch.no_grad():
+                for x_batch, y_batch in val_loader:
+                    x_batch = x_batch.to(self.device)
+                    y_batch = y_batch.to(self.device)
+                    pred = model(x_batch)
+                    loss = criterion(pred, y_batch)
+                    val_loss += loss.item() * x_batch.size(0)
+            val_loss /= len(val_loader.dataset)
+            # ====== 早停逻辑 ======
+            if val_loss < best_val_loss:
+                best_val_loss = val_loss
+                epochs_no_improve = 0
+                # 保存当前最佳模型（深拷贝）
+                best_model_state = model.state_dict()
+            else:
+                epochs_no_improve += 1
+            print(f"Epoch {epoch+1}/{num_epochs} | "
+                  f"Train Loss: {train_loss:.6f} | "
+                  f"Val Loss: {val_loss:.6f} | "
+                  f"Best Val Loss: {best_val_loss:.6f}")
+            # 检查是否触发早停
+            if epochs_no_improve >= patience:
+                print(f"Early stopping triggered after {epoch+1} epochs!")
+                early_stop = True
+                break
+        # ====== 加载最佳模型权重 ======
+        if best_model_state is not None:
+            model.load_state_dict(best_model_state)
+            self.model = model
+            print("Loaded best model weights based on validation loss.")
+    def predict(self, Xi):
+        import torch
+        batch_size = 2000
+        self.model.eval()  # 切换到评估模式
+        device = next(self.model.parameters()).device
+        predictions = []
+        with torch.no_grad():  # 禁用梯度计算，大幅节省显存
+            for i in range(0, len(Xi), batch_size):
+                x_batch = Xi[i:i + batch_size].to(device)
+                pred_batch = self.model(x_batch)
+                predictions.append(pred_batch.cpu())  # 立即移回 CPU 节省 GPU 显存
+        return torch.cat(predictions, dim=0)
 
 
