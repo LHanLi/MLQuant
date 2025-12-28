@@ -62,7 +62,7 @@ class Modeling():
         #    ", test:"+str(rollingWindow[i][3])+"-"+str(rollingWindow[i][4])+"-"+str(rollingWindow[i][5]) \
         #            for i in range(len(rollingWindow)))}")
         parts = [
-            " " * 35 + f"第{i+1}滑动窗口 train:{rw[0]}-{rw[1]}-{rw[2]}, test:{rw[3]}-{rw[4]}-{rw[5]}\n"
+            " " * 35 + f"第{i+1}滑动窗口 train:{rw[0]}-{rw[1]}-{rw[2]}, test:{rw[3]}-{rw[4]}-{rw[5]}"
             for i, rw in enumerate(rollingWindow)
         ]
         msg = "prepare,滚动窗口划分:\n" + ("\n").join(parts)
@@ -130,9 +130,6 @@ class Modeling():
             self.log(f"train,特征筛选器选取{','.join(featureNames)}, 共{len(featureNames)}个因子")
     
         Xi, Yi, predictIndex = self.getTensor(self.data, featureNames, trainPreStart, trainStart, trainEnd)
-        if ~self.param["trainParam"]["tensor"]: # 如果关闭张量模式则转化为DataFrame
-            Xi = pd.DataFrame(Xi.reshape(Xi.shape[0], -1))
-            Yi = pd.DataFrame(Yi.reshape(Yi.shape[0], -1))
         self.log(f"train,得到训练集特征张量维度:{Xi.shape},实例化Model") 
         if self.Model is None:
             model = MLQ.io.importMyClass(self.param["modelParam"]["selectModel"])(self.param["modelParam"])
@@ -147,6 +144,8 @@ class Modeling():
         df_train["predict"] = model.predict(Xi)
         model.store["train"] = df_train.to_dict()
         model.saveModel(modelLoc)
+        model.cleanup()
+        del model
     # 模型评价
     def test(self, processNumber):
         while 0 not in self.dataFinished:
@@ -162,9 +161,6 @@ class Modeling():
         self.log("test,全部数据已加载完毕,测试模型")
         # 所有模型测试从该滑动窗口测试集开始到最后一个滑动窗口测试集最后时间
         Xi_test, Yi_test, predictIndex_test = self.getTensor(self.data, filter.store["featureNames"], testPreStart, testStart, self.rollingWindow[-1][-1])
-        if ~self.param["trainParam"]["tensor"]:
-            Xi_test = pd.DataFrame(Xi_test.reshape(Xi_test.shape[0], -1))
-            Yi_test = pd.DataFrame(Yi_test.reshape(Yi_test.shape[0], -1))
         self.log(f"test,得到测试数据{Xi_test.shape}")
         df_test = self.data.iloc[predictIndex_test][["date", "curTime", "symbol",\
             self.param["trainParam"]["predictLabel"]]]
@@ -199,6 +195,8 @@ class Modeling():
         model.store["test"] = df_test.to_dict()
         MLQ.io.saveDataFrame(df_test[(df_test["date"]>=testStart)&(df_test["date"]<=testEnd)], os.path.join(self.param["trainParam"]["outPath"], "result"))
         model.saveModel(modelLoc)
+        model.cleanup()
+        del model
     # 训练完毕后生成模型报告
     def report(self):
         self.log("report,开始评价result")
@@ -233,9 +231,6 @@ class Modeling():
         model = self.restoreModel(modelLoc)
         Xi, Yi, predictIndex = self.getTensor(data, filter.store["featureNames"], data["date"].unique()[0],\
             data["date"].unique()[self.param["trainParam"]["windowLen"]-1], data["date"].unique()[-1], False)
-        if ~self.param["trainParam"]["tensor"]:
-            Xi = pd.DataFrame(Xi.reshape(Xi.shape[0], -1))
-            #Yi = pd.DataFrame(Yi.reshape(Yi.shape[0], -1))
         return predictIndex, model.predict(Xi)
     # 返回B*T*m张量,B是legalData数量,回看窗口是T,m个特征(注意，回看窗口中可以包含illegal)
     def getTensor(self, data, featureNames, datePreStart, dateStart, dateEnd, predict=True):
@@ -264,6 +259,13 @@ class Modeling():
             Xi = np.concatenate(\
                 (np.array(Xi_shift).reshape(-1, 1, len(Xi_shift.columns)), Xi), axis=1)
         Xi = Xi[[i-predictIndex[-1]-1 for i in predictIndex]] # 提取和Yi对应的特征张量
+        if not self.param["trainParam"]["tensor"]: # 如果关闭张量模式则转化为DataFrame
+            Xi = pd.DataFrame(Xi.reshape(Xi.shape[0], -1))
+            Yi = pd.DataFrame(Yi.reshape(Yi.shape[0], -1))
+        else:
+            import torch  # 张量模式默认torch
+            Xi = torch.from_numpy(Xi).float()   
+            Yi = torch.from_numpy(Yi).float()
         return Xi, Yi, predictIndex
     # log函数
     def log(self, logstr):
@@ -306,6 +308,20 @@ class Model:
         with open(os.path.join(modelDir, 'model.pkl'), 'rb') as f:
             model = pickle.load(f)
             self.__dict__.update(model.__dict__)
+    def cleanup(self):
+        """显式释放模型相关资源"""
+        import torch
+        if hasattr(self, 'model') and self.model is not None:
+            del self.model
+        if hasattr(self, 'optimizer') and self.optimizer is not None:
+            del self.optimizer
+        # 清空 store 中可能的大对象
+        self.store.clear()
+        # 强制垃圾回收
+        import gc
+        gc.collect()
+        if torch.cuda.is_available():
+            torch.cuda.empty_cache()
     #def train(self, Xi, Yi):  # 需要自定义训练过程
     #def predict(self, Xi): # 需要自定义预测过程 self.model即可
 
