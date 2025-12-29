@@ -138,7 +138,7 @@ class Modeling():
         # 模型训练
         model.train(Xi, Yi)
         model.store["window"] = self.rollingWindow[processNumber]
-        self.log("train,模型训练完毕,保存模型及训练集结果")
+        self.log("train,模型训练完毕")
         df_train = self.data.iloc[predictIndex][["date", "curTime", "symbol", \
             self.param["trainParam"]["predictLabel"]]]
         df_train["predict"] = model.predict(Xi)
@@ -146,6 +146,7 @@ class Modeling():
         model.saveModel(modelLoc)
         model.cleanup()
         del model
+        self.log("train,已保存模型及训练集结果")
     # 模型评价
     def test(self, processNumber):
         while 0 not in self.dataFinished:
