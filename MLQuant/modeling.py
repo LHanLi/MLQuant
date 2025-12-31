@@ -100,6 +100,8 @@ class Modeling():
                 self.dataFinished.append(0)
             else:
                 self.dataFinished.append(i+1)
+    def loadRolllingWindowData(self, i):
+        pass
     # 训练模型
     def train(self, processNumber):
         trainPreStart, trainStart, trainEnd, testPreStart, testStart, testEnd = self.rollingWindow[processNumber]
