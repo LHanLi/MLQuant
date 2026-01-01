@@ -132,7 +132,7 @@ class Modeling():
             self.log(f"train,特征筛选器选取{','.join(featureNames)}, 共{len(featureNames)}个因子")
         self.log(f"train,获取训练集特征张量") 
         Xi, Yi, predictIndex = self.getTensor(self.data, featureNames, trainPreStart, trainStart, trainEnd)
-        self.log(f"train,得到张量:{Xi.shape},实例化Model,训练模型") 
+        self.log(f"train,得到张量:Xi({Xi.shape}),Yi({Yi.shape}),实例化Model,训练模型") 
         if self.Model is None:
             model = MLQ.io.importMyClass(self.param["modelParam"]["selectModel"])(self.param["modelParam"])
         else:
