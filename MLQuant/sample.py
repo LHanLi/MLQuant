@@ -1,6 +1,7 @@
 import numpy as np
 import pandas as pd
 from MLQuant.modeling import Filter, Model
+import time
 
 # ===================
 # ===== Filter ======
@@ -168,8 +169,6 @@ class gruModel(Model):
                 batch_first=True
             )
             self.fc = torch.nn.Linear(hidden_size, output_size)
-            total_params = sum(p.numel() for p in self.parameters() if p.requires_grad)
-            print(f"GRURegressor initialized with {total_params:,} trainable parameters")
         def forward(self, x):
             import torch
             batch_size = x.size(0)
@@ -182,7 +181,7 @@ class gruModel(Model):
         import torch
         # 确定训练进行设备
         self.device = torch.device(self.modelParam.get("device", 'cuda' if torch.cuda.is_available() else 'cpu'))
-        print(f"在 {self.device} 上执行训练")
+        self.log += f"在 {self.device} 上执行训练\n"
         from torch.utils.data import TensorDataset, random_split, DataLoader
         # 划分训练集验证集
         #Xi = Xi.to(self.device)
@@ -204,6 +203,8 @@ class gruModel(Model):
             num_layers=self.modelParam.get("num_layers", 2),
             output_size=1
         ).to(self.device)
+        total_params = sum(p.numel() for p in model.parameters() if p.requires_grad)
+        self.log += f"model initialized with {total_params:,} trainable parameters\n"
         # 损失函数
         criterion = torch.nn.MSELoss()
         # 优化器
@@ -213,16 +214,18 @@ class gruModel(Model):
         patience = self.modelParam.get("patience", 10)        # 容忍多少个 epoch 没有 improvement
         best_val_loss = float('inf')
         epochs_no_improve = 0
-        early_stop = False
         best_model_state = None     # 保存最佳模型权重
         num_epochs = self.modelParam.get("num_epochs", 500)  # 可以设大一点，因为会早停
         # 开始epoch循环
         for epoch in range(num_epochs):
+            time0 = time.time()
             model.train()
             train_loss = 0.0
             for x_batch, y_batch in train_loader:
+                #time1 = time.time()
                 x_batch = x_batch.to(self.device)
                 y_batch = y_batch.to(self.device)
+                #self.log += f"train batch 加载至{self.device} 耗时{time.time()-time1:.1f}s\n"
                 optimizer.zero_grad()
                 pred = model(x_batch)
                 loss = criterion(pred, y_batch)
@@ -249,20 +252,19 @@ class gruModel(Model):
                 best_model_state = model.state_dict()
             else:
                 epochs_no_improve += 1
-            print(f"Epoch {epoch+1}/{num_epochs} | "
-                  f"Train Loss: {train_loss:.6f} | "
-                  f"Val Loss: {val_loss:.6f} | "
-                  f"Best Val Loss: {best_val_loss:.6f}")
+            self.log += f"Epoch {epoch+1}/{num_epochs} | 耗时: {time.time()-time0:.1f}s "+\
+                  f"Train Loss: {train_loss:.6f} | "+\
+                  f"Val Loss: {val_loss:.6f} | "+\
+                  f"Best Val Loss: {best_val_loss:.6f}\n"
             # 检查是否触发早停
             if epochs_no_improve >= patience:
-                print(f"Early stopping triggered after {epoch+1} epochs!")
-                early_stop = True
+                self.log += f"Early stopping triggered after {epoch+1} epochs!\n"
                 break
         # ====== 加载最佳模型权重 ======
         if best_model_state is not None:
             model.load_state_dict(best_model_state)
             self.model = model
-            print("Loaded best model weights based on validation loss.")
+            self.log += "Loaded best model weights based on validation loss.\n"
     def predict(self, Xi):
         import torch
         batch_size = 2000
