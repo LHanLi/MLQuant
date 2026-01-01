@@ -115,7 +115,7 @@ class Modeling():
         if "model.pkl" in os.listdir(modelLoc):
             self.log(f"train,第{processNumber+1}滚动窗口train已完成,跳过")
             return
-        self.log("train,实例化Filter")
+        self.log("train,实例化Filter获取featureNames")
         if self.Filter is None:
             filter = MLQ.io.importMyClass(self.param["featureParam"]["selectFilter"])(self.param["featureParam"])
         else:
@@ -130,9 +130,9 @@ class Modeling():
             self.log(f"train,特征筛选器选取{','.join(featureNames[:10])}, 等共{len(featureNames)}个因子")
         else:
             self.log(f"train,特征筛选器选取{','.join(featureNames)}, 共{len(featureNames)}个因子")
-    
+        self.log(f"train,获取训练集特征张量") 
         Xi, Yi, predictIndex = self.getTensor(self.data, featureNames, trainPreStart, trainStart, trainEnd)
-        self.log(f"train,得到训练集特征张量维度:{Xi.shape},实例化Model") 
+        self.log(f"train,得到张量:{Xi.shape},实例化Model,训练模型") 
         if self.Model is None:
             model = MLQ.io.importMyClass(self.param["modelParam"]["selectModel"])(self.param["modelParam"])
         else:
