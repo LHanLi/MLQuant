@@ -107,8 +107,7 @@ class lgbModel(Model):
                 categorical_features.append(col)
             else:
                 # 确保其他列为数值型
-                Xi[col] = pd.to_numeric(Xi[col], errors='coerce').astype('float32')
-    
+                Xi[col] = pd.to_numeric(Xi[col], errors='coerce').astype('float32') 
         # 构建模型（注意：LGBMRegressor 不需要在初始化时传 categorical_feature）
         self.model = lgb.LGBMRegressor(
             boosting_type=self.modelParam.get("boosting_type", 'gbdt'),
@@ -130,10 +129,17 @@ class lgbModel(Model):
         ) 
         if categorical_features:
             cat_feat_lgb = ["name:" + col for col in categorical_features]
-            print(f"类别因子:{','.join(cat_feat_lgb)}")
+            self.log += f"类别因子:{','.join(cat_feat_lgb)}"
         else:
             cat_feat_lgb = None  # 或 [] 
         self.model.fit(Xi, Yi, categorical_feature=cat_feat_lgb)
+        # 因子重要性
+        importances = self.model.feature_importances_
+        feature_names = Xi.columns if hasattr(Xi, 'columns') else [f'feat_{i}' for i in range(Xi.shape[1])]
+        self.store["importance_df"] = {
+            'feature': feature_names,
+            'importance': importances
+        }
     def predict(self, Xi):
         # 识别类别特征：bool 和 category 类型
         from pandas.api.types import is_categorical_dtype, is_bool_dtype
@@ -170,10 +176,7 @@ class gruModel(Model):
             )
             self.fc = torch.nn.Linear(hidden_size, output_size)
         def forward(self, x):
-            import torch
-            batch_size = x.size(0)
-            h_0 = torch.zeros(self.num_layers, batch_size, self.hidden_size).to(x.device)
-            output, _ = self.gru(x, h_0)
+            output, _ = self.gru(x) # 自动初始化h0
             last_hidden = output[:, -1, :]  # (batch, hidden_size)
             prediction = self.fc(last_hidden)  # (batch, output_size)
             return prediction
@@ -193,7 +196,7 @@ class gruModel(Model):
             dataset, [train_size, val_size],
             generator=torch.Generator().manual_seed(42))
         # 按batchsize划分
-        batch_size = self.modelParam.get("batch_size", 2000)
+        batch_size = self.modelParam.get("batch_size", 3000)
         train_loader = DataLoader(train_dataset, batch_size=batch_size, shuffle=True)
         val_loader = DataLoader(val_dataset, batch_size=batch_size, shuffle=False)
         # 实例化模型
@@ -208,7 +211,153 @@ class gruModel(Model):
         # 损失函数
         criterion = torch.nn.MSELoss()
         # 优化器
-        optimizer = torch.optim.Adam(model.parameters(), lr=1e-3)
+        optimizer = torch.optim.Adam(model.parameters(), lr=self.modelParam.get("lr", 1e-3))
+
+        # ====== 早停相关参数 ======
+        patience = self.modelParam.get("patience", 10)        # 容忍多少个 epoch 没有 improvement
+        best_val_loss = float('inf')
+        epochs_no_improve = 0
+        best_model_state = None     # 保存最佳模型权重
+        num_epochs = self.modelParam.get("num_epochs", 500)  # 可以设大一点，因为会早停
+        # 开始epoch循环
+        for epoch in range(num_epochs):
+            time0 = time.time()
+            model.train()
+            train_loss = 0.0
+            for x_batch, y_batch in train_loader:
+                #time1 = time.time()
+                x_batch = x_batch.to(self.device)
+                y_batch = y_batch.to(self.device)
+                #self.log += f"train batch 加载至{self.device} 耗时{time.time()-time1:.1f}s\n"
+                optimizer.zero_grad()
+                pred = model(x_batch)
+                loss = criterion(pred, y_batch)
+                loss.backward()
+                optimizer.step()
+                train_loss += loss.item() * x_batch.size(0)
+            train_loss /= len(train_loader.dataset)
+            # 验证阶段
+            model.eval()
+            val_loss = 0.0
+            with torch.no_grad():
+                for x_batch, y_batch in val_loader:
+                    x_batch = x_batch.to(self.device)
+                    y_batch = y_batch.to(self.device)
+                    pred = model(x_batch)
+                    loss = criterion(pred, y_batch)
+                    val_loss += loss.item() * x_batch.size(0)
+            val_loss /= len(val_loader.dataset)
+            # ====== 早停逻辑 ======
+            if val_loss < best_val_loss:
+                best_val_loss = val_loss
+                epochs_no_improve = 0
+                # 保存当前最佳模型（深拷贝）
+                best_model_state = model.state_dict()
+            else:
+                epochs_no_improve += 1
+            self.log += f"Epoch {epoch+1}/{num_epochs} | 耗时: {time.time()-time0:.1f}s "+\
+                  f"Train Loss: {train_loss:.8f} | "+\
+                  f"Val Loss: {val_loss:.8f} | "+\
+                  f"Best Val Loss: {best_val_loss:.8f}\n"
+            # 检查是否触发早停
+            if epochs_no_improve >= patience:
+                self.log += f"Early stopping triggered after {epoch+1} epochs!\n"
+                break
+        # ====== 加载最佳模型权重 ======
+        if best_model_state is not None:
+            model.load_state_dict(best_model_state)
+            self.model = model
+            self.log += "Loaded best model weights based on validation loss.\n"
+    def predict(self, Xi):
+        import torch
+        batch_size = 2000
+        self.model.eval()  # 切换到评估模式
+        device = next(self.model.parameters()).device
+        predictions = []
+        with torch.no_grad():  # 禁用梯度计算，大幅节省显存
+            for i in range(0, len(Xi), batch_size):
+                x_batch = Xi[i:i + batch_size].to(device)
+                pred_batch = self.model(x_batch)
+                predictions.append(pred_batch.cpu())  # 立即移回 CPU 节省 GPU 显存
+        return torch.cat(predictions, dim=0)
+
+
+
+class transformerModel(Model):
+    import torch
+    class TransformerRegressor(torch.nn.Module):
+        import torch
+        # 位置编码
+        class PositionalEncoding(torch.nn.Module):
+            def __init__(self, d_model, max_len=5000):
+                import math, torch
+                super().__init__()
+                pe = torch.zeros(max_len, d_model)
+                position = torch.arange(0, max_len, dtype=torch.float).unsqueeze(1)
+                div_term = torch.exp(torch.arange(0, d_model, 2).float() * (-math.log(10000.0) / d_model))
+                pe[:, 0::2] = torch.sin(position * div_term)
+                pe[:, 1::2] = torch.cos(position * div_term)
+                pe = pe.unsqueeze(0)  # (1, max_len, d_model)
+                self.register_buffer('pe', pe)
+            def forward(self, x): # x: (B, T, d_model)
+                x = x + self.pe[:, :x.size(1), :]
+                return x
+        def __init__(self, input_dim, d_model=128, nhead=8, num_layers=3, dim_feedforward=512, dropout=0.1):
+            super().__init__()
+            import torch
+            self.input_proj = torch.nn.Linear(input_dim, d_model)  # 将 n → d_model
+            self.pos_encoder = self.PositionalEncoding(d_model)
+            encoder_layer = torch.nn.TransformerEncoderLayer(
+                d_model=d_model,
+                nhead=nhead,
+                dim_feedforward=dim_feedforward,
+                dropout=dropout,
+                batch_first=True  # 关键！使输入为 (B, T, d_model)
+            )
+            self.transformer_encoder = torch.nn.TransformerEncoder(encoder_layer, num_layers=num_layers)
+            self.regressor = torch.nn.Linear(d_model, 1)  # 输出标量
+        def forward(self, x):
+            # x: (B, T, n)
+            x = self.input_proj(x)  # (B, T, d_model)
+            x = self.pos_encoder(x)  # (B, T, d_model)
+            x = self.transformer_encoder(x)  # (B, T, d_model)
+            # 全局平均池化：对时间维度 T 求平均
+            x = x.mean(dim=1)  # (B, d_model)
+            out = self.regressor(x)  # (B, 1)
+            return out
+    def train(self, Xi, Yi):
+        import torch
+        # 确定训练进行设备
+        self.device = torch.device(self.modelParam.get("device", 'cuda' if torch.cuda.is_available() else 'cpu'))
+        self.log += f"在 {self.device} 上执行训练\n"
+        from torch.utils.data import TensorDataset, random_split, DataLoader
+        # 划分训练集验证集
+        #Xi = Xi.to(self.device)
+        #Yi = Yi.to(self.device)
+        dataset = TensorDataset(Xi, Yi)
+        val_size = int(len(dataset)*self.modelParam.get("val_ratio", 0.05))
+        train_size = len(dataset) - val_size
+        train_dataset, val_dataset = random_split(
+            dataset, [train_size, val_size],
+            generator=torch.Generator().manual_seed(42))
+        # 按batchsize划分
+        batch_size = self.modelParam.get("batch_size", 3000)
+        train_loader = DataLoader(train_dataset, batch_size=batch_size, shuffle=True)
+        val_loader = DataLoader(val_dataset, batch_size=batch_size, shuffle=False)
+        # 实例化模型
+        model = self.TransformerRegressor(
+            input_size=Xi.shape[2],
+            d_model=self.modelParam.get("d_model", 128),
+            nhead=self.modelParam.get("nhead", 8),
+            num_layers=self.modelParam.get("num_layers", 2),
+            dim_feedforward=self.modelParam.get("dim_feedforward", 512)
+        ).to(self.device)
+        total_params = sum(p.numel() for p in model.parameters() if p.requires_grad)
+        self.log += f"model initialized with {total_params:,} trainable parameters\n"
+        # 损失函数
+        criterion = torch.nn.MSELoss()
+        # 优化器
+        optimizer = torch.optim.Adam(model.parameters(), lr=self.modelParam.get("lr", 1e-3))
 
         # ====== 早停相关参数 ======
         patience = self.modelParam.get("patience", 10)        # 容忍多少个 epoch 没有 improvement
@@ -277,5 +426,3 @@ class gruModel(Model):
                 pred_batch = self.model(x_batch)
                 predictions.append(pred_batch.cpu())  # 立即移回 CPU 节省 GPU 显存
         return torch.cat(predictions, dim=0)
-
-
