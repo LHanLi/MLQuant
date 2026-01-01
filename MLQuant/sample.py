@@ -180,8 +180,13 @@ class gruModel(Model):
             return prediction
     def train(self, Xi, Yi):
         import torch
+        # 确定训练进行设备
+        self.device = torch.device(self.modelParam.get("device", 'cuda' if torch.cuda.is_available() else 'cpu'))
+        print(f"在 {self.device} 上执行训练")
         from torch.utils.data import TensorDataset, random_split, DataLoader
         # 划分训练集验证集
+        #Xi = Xi.to(self.device)
+        #Yi = Yi.to(self.device)
         dataset = TensorDataset(Xi, Yi)
         val_size = int(len(dataset)*self.modelParam.get("val_ratio", 0.05))
         train_size = len(dataset) - val_size
@@ -192,9 +197,6 @@ class gruModel(Model):
         batch_size = self.modelParam.get("batch_size", 2000)
         train_loader = DataLoader(train_dataset, batch_size=batch_size, shuffle=True)
         val_loader = DataLoader(val_dataset, batch_size=batch_size, shuffle=False)
-        # 确定训练进行设备
-        self.device = torch.device(self.modelParam.get("device", 'cuda' if torch.cuda.is_available() else 'cpu'))
-        print(f"在 {self.device} 上执行训练")
         # 实例化模型
         model = self.GRURegressor(
             input_size=Xi.shape[2],
