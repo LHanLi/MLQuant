@@ -134,7 +134,8 @@ class lgbModel(Model):
             cat_feat_lgb = None  # 或 [] 
         self.model.fit(Xi, Yi, categorical_feature=cat_feat_lgb)
         # 因子重要性
-        self.store["importance"] = self.model.feature_importances_
+        self.store["importance_split"] = list(self.model.feature_importances_)
+        self.store["importance_gain"] = list(self.model.booster_.feature_importance(importance_type='gain'))
     def predict(self, Xi):
         # 识别类别特征：bool 和 category 类型
         from pandas.api.types import is_categorical_dtype, is_bool_dtype
