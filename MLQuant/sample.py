@@ -134,12 +134,7 @@ class lgbModel(Model):
             cat_feat_lgb = None  # 或 [] 
         self.model.fit(Xi, Yi, categorical_feature=cat_feat_lgb)
         # 因子重要性
-        importances = self.model.feature_importances_
-        feature_names = Xi.columns if hasattr(Xi, 'columns') else [f'feat_{i}' for i in range(Xi.shape[1])]
-        self.store["importance_df"] = {
-            'feature': feature_names,
-            'importance': importances
-        }
+        self.store["importance"] = self.model.feature_importances_
     def predict(self, Xi):
         # 识别类别特征：bool 和 category 类型
         from pandas.api.types import is_categorical_dtype, is_bool_dtype
