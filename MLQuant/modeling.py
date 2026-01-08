@@ -43,7 +43,7 @@ class Modeling():
                               <= self.param["trainParam"]["endResultDate"]]
         testStart_list = valid_test_starts[::self.param["trainParam"]["testSetLen"]]
         testStartEnd_list = list(zip(testStart_list, [[d for d in valid_test_starts if d < \
-                nextStart][-1] for nextStart in testStart_list[1:]] + [tradeDates[-1]]))
+                nextStart][-1] for nextStart in testStart_list[1:]] + [valid_test_starts[-1]]))
         rollingWindow = []
         for testStart, testEnd in testStartEnd_list:
             testPreStart = tradeDates[max(tradeDates.index(testStart)\
