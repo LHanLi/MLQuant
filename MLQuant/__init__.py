@@ -1,2 +1,2 @@
 # __init__.py
-from MLQuant import modeling, io, work, post, sample
+from MLQuant import modeling, io, work, post, sample, backtest
