@@ -5,8 +5,8 @@ import json, pickle, time, threading, glob, os
 
 
 class Modeling():
-    def __init__(self, param, data=None, Filter=None, Model=None):
-        if type(param)==type("outPath"):
+    def __init__(self, param={}, data=None, Filter=None, Model=None):
+        if type(param)==type("outPath"): # 可以直接输入模型输出位置生成Modeling
             self.param = MLQ.io.readjson(os.path.join(param, "report", "param.json"))
             self.param["trainParam"]["outPath"] = param
         else:
@@ -57,10 +57,6 @@ class Modeling():
             rollingWindow.append([trainPreStart, trainStart, trainEnd, testPreStart, testStart, testEnd])    
         self.tradeDates = tradeDates
         self.rollingWindow = rollingWindow
-        #self.log(f"prepare,滚动窗口划分:\n" + " "*35 + f"{("\n"+" "*35).join("第"+str(i+1)+"滑动窗口 "+\
-        #    "train:"+str(rollingWindow[i][0])+"-"+str(rollingWindow[i][1])+"-"+str(rollingWindow[i][2])+\
-        #    ", test:"+str(rollingWindow[i][3])+"-"+str(rollingWindow[i][4])+"-"+str(rollingWindow[i][5]) \
-        #            for i in range(len(rollingWindow)))}")
         parts = [
             " " * 35 + f"第{i+1}滑动窗口 train:{rw[0]}-{rw[1]}-{rw[2]}, test:{rw[3]}-{rw[4]}-{rw[5]}"
             for i, rw in enumerate(rollingWindow)
@@ -132,7 +128,7 @@ class Modeling():
             self.log(f"train,特征筛选器选取{','.join(featureNames)}, 共{len(featureNames)}个因子")
         self.log(f"train,获取训练集特征张量") 
         Xi, Yi, predictIndex = self.getTensor(self.data, featureNames, trainPreStart, trainStart, trainEnd)
-        self.log(f"train,得到张量:Xi({Xi.shape}),Yi({Yi.shape}),实例化Model,训练模型") 
+        self.log(f"train,得到张量:Xi({Xi.shape}),Yi({Yi.shape}),实例化Model,开始训练模型") 
         if self.Model is None:
             model = MLQ.io.importMyClass(self.param["modelParam"]["selectModel"])(self.param["modelParam"])
         else:
@@ -262,14 +258,23 @@ class Modeling():
             Xi_shift = Xi_shift.groupby('symbol').shift().fillna(0) # 如果数据不足windowLen则补0
             Xi = np.concatenate(\
                 (np.array(Xi_shift).reshape(-1, 1, len(Xi_shift.columns)), Xi), axis=1)
-        Xi = Xi[[i-predictIndex[-1]-1 for i in predictIndex]] # 提取和Yi对应的特征张量
+        # 获取对应predictIndex的featureIndex
+        Xi_loc = []
+        j = 0
+        for i in range(len(featureIndex)):
+            if featureIndex[i]==predictIndex[j]:
+                Xi_loc.append(i)
+                j += 1
+        Xi = Xi[Xi_loc]
         if not self.param["trainParam"]["tensor"]: # 如果关闭张量模式则转化为DataFrame
             Xi = pd.DataFrame(Xi.reshape(Xi.shape[0], -1))
-            Yi = pd.DataFrame(Yi.reshape(Yi.shape[0], -1))
+            if predict:
+                Yi = pd.DataFrame(Yi.reshape(Yi.shape[0], -1))
         else:
             import torch  # 张量模式默认torch
             Xi = torch.from_numpy(Xi).float()   
-            Yi = torch.from_numpy(Yi).float()
+            if predict:
+                Yi = torch.from_numpy(Yi).float()
         return Xi, Yi, predictIndex
     # log函数
     def log(self, logstr):
