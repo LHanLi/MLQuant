@@ -11,6 +11,8 @@ class Modeling():
             self.param["trainParam"]["outPath"] = param
         else:
             self.param = param
+        if self.param["trainParam"]["predictLabel"]=="predict":
+            raise ValueError("预测值名称不合法")
         self.data = data
         self.Filter = Filter
         self.Model = Model 
@@ -22,7 +24,7 @@ class Modeling():
             loader_thread = threading.Thread(target=self.loadData, daemon=True)
             loader_thread.start()
         else:
-            if (self.data["date"].min()==self.rollingWindow[0][0])&(self.data["date"].max()==self.rollingWindow[-1][-1]):
+            if (self.data["date"].min()<=self.rollingWindow[0][0])&(self.data["date"].max()>=self.rollingWindow[-1][-1]):
                 for i in range(len(self.rollingWindow)+1):
                     self.dataFinished.append(i) # 全部数据标记为已读
             else:
