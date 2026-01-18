@@ -40,7 +40,10 @@ class Modeling():
         os.makedirs(self.param["trainParam"]["outPath"], exist_ok=True)
         MLQ.io.savejson(self.param, os.path.join(self.param["trainParam"]["outPath"], "report", "param.json"))
         # 滑动窗口划分
-        tradeDates = sorted([int(d) for d in os.listdir(self.param["trainParam"]["featureDir"]) if d.isdigit()])
+        if self.data is None:# 启动异步数据加载线程
+            tradeDates = sorted([int(d) for d in os.listdir(self.param["trainParam"]["featureDir"]) if d.isdigit()])
+        else:
+            tradeDates = sorted(list(self.data["date"].unique()))
         valid_test_starts = [d for d in tradeDates if self.param["trainParam"]["strResultDate"] <= d\
                               <= self.param["trainParam"]["endResultDate"]]
         testStart_list = valid_test_starts[::self.param["trainParam"]["testSetLen"]]
