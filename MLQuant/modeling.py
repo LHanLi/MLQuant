@@ -87,6 +87,8 @@ class Modeling():
                 (loadStart, loadEnd), (93000000, 150000000))
             predict = MLQ.io.loadDataFrame(self.param["trainParam"]["predictDir"], \
                 (loadStart, loadEnd), (93000000, 150000000)).fillna(0)
+            if self.param["trainParam"]["predictLabel"] not in predict.columns:
+                raise ValueError(f"{loadStart}-{loadEnd}数据predictLabel缺失")
             if i==0:
                 self.data = feature.merge(predict[["date", "curTime", "symbol", \
                     self.param["trainParam"]["predictLabel"]]], on=["date", "curTime", "symbol"]).\
