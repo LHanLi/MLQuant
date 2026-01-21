@@ -268,9 +268,12 @@ class Modeling():
         # 获取对应predictIndex的featureIndex
         Xi_loc = []
         j = 0
-        for i in range(len(featureIndex)):
-            if featureIndex[i]==predictIndex[j]:
-                Xi_loc.append(i)
+        #for i in range(len(featureIndex)):
+        for i in range(len(predictIndex)):
+            #if featureIndex[i]==predictIndex[j]:
+            if predictIndex[i]==featureIndex[j]:
+                #Xi_loc.append(i)
+                Xi_loc.append(j)
                 j += 1
         Xi = Xi[Xi_loc]
         if not self.param["trainParam"]["tensor"]: # 如果关闭张量模式则转化为DataFrame
