@@ -100,33 +100,84 @@ def loadDataFrame(
             raise ValueError("`curtime_range` must be a tuple of two integers (start, end).")
         time_min, time_max = curtime_range
 
+    # 获取读取文件
     file_paths = []
+    # 先尝试按新结构（单个 .pqt 文件 per date）匹配
+    if date_range is not None:
+        date_min, date_max = date_range
+    else:
+        date_min = date_max = None
 
-    # 遍历所有 date 目录
-    for date_dir in output_path.iterdir():
-        if not date_dir.is_dir():
-            continue
+    # 情况1：检查是否存在 {date}.pqt 格式的文件（新结构）
+    for pqt_file in output_path.glob("*.pqt"):
         try:
-            date_val = int(date_dir.name)
+            date_val = int(pqt_file.stem)
         except ValueError:
-            continue  # 忽略非整数目录名
+            continue  # 忽略非整数文件名
 
-        # 检查是否在 date 范围内
         if date_min is not None and (date_val < date_min or date_val > date_max):
             continue
 
-        # 遍历该日期下的所有 .pqt 文件
-        for pqt_file in date_dir.glob("*.pqt"):
-            try:
-                cur_time_val = int(pqt_file.stem)
-            except ValueError:
-                continue  # 忽略非整数文件名
+        # 新结构下没有 curTime 粒度，因此无法按 curtime_range 过滤！
+        # 如果用户指定了 curtime_range，则不能使用新结构（或需在读取后过滤）
+        # 此处我们假设：若存在新结构文件，且用户未指定 curtime_range，则接受
+        if curtime_range is not None:
+            # 新结构无法按 curTime 过滤，跳过（或可抛出警告/错误）
+            continue
 
-            # 检查是否在 curTime 范围内
-            if time_min is not None and (cur_time_val < time_min or cur_time_val > time_max):
+        file_paths.append(str(pqt_file))
+
+    # 情况2：如果没找到新结构文件，回退到旧结构（兼容性）
+    if not file_paths:
+        # 遍历所有 date 目录（旧结构）
+        for date_dir in output_path.iterdir():
+            if not date_dir.is_dir():
+                continue
+            try:
+                date_val = int(date_dir.name)
+            except ValueError:
                 continue
 
-            file_paths.append(str(pqt_file))
+            if date_min is not None and (date_val < date_min or date_val > date_max):
+                continue
+
+            for pqt_file in date_dir.glob("*.pqt"):
+                try:
+                    cur_time_val = int(pqt_file.stem)
+                except ValueError:
+                    continue
+
+                if time_min is not None and (cur_time_val < time_min or cur_time_val > time_max):
+                    continue
+
+                file_paths.append(str(pqt_file))
+#    file_paths = []
+#
+#    # 遍历所有 date 目录
+#    for date_dir in output_path.iterdir():
+#        if not date_dir.is_dir():
+#            continue
+#        try:
+#            date_val = int(date_dir.name)
+#        except ValueError:
+#            continue  # 忽略非整数目录名
+#
+#        # 检查是否在 date 范围内
+#        if date_min is not None and (date_val < date_min or date_val > date_max):
+#            continue
+#
+#        # 遍历该日期下的所有 .pqt 文件
+#        for pqt_file in date_dir.glob("*.pqt"):
+#            try:
+#                cur_time_val = int(pqt_file.stem)
+#            except ValueError:
+#                continue  # 忽略非整数文件名
+#
+#            # 检查是否在 curTime 范围内
+#            if time_min is not None and (cur_time_val < time_min or cur_time_val > time_max):
+#                continue
+#
+#            file_paths.append(str(pqt_file))
 
     if not file_paths:
         print("No files matched the specified date/curTime range.")
