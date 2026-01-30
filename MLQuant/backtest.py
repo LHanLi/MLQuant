@@ -6,7 +6,7 @@ import pandas as pd
 # 输入全部交易品种的截面收益率DataFrame(某元素为从上一个index时刻到该index时刻该列资产收益率)
 class BackTest():
     def __init__(self, dfReturns, param, Strategy):
-        self.dfReturns = dfReturns
+        self.dfReturns = dfReturns.fillna(0)
         self.param = param
         self.save = {} # 用于保存回测中处理的变量
         self.strat = Strategy(param.get("stratParam", {}))
