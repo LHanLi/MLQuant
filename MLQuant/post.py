@@ -158,7 +158,7 @@ def plotDay(returnDay, benchmark, loc=""):
 
     ## === 超额收益 ===
     excess = returnDay-benchmark
-    excess_ann = net.iloc[-1]/(1+benchmark).prod()-1
+    excess_ann = (net.iloc[-1]/(1+benchmark).prod())**(250/len(returnDay))-1
     excess_sharpe = excess_ann/(np.sqrt(250)*excess.std())
     excess_net = (1+excess).cumprod()
     excess_drawdown = (excess_net/excess_net.cummax()-1)
