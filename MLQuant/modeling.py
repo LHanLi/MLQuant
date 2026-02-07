@@ -3,7 +3,21 @@ import numpy as np
 import MLQuant as MLQ
 import json, pickle, time, threading, glob, os
 
-
+"""
+trainParam:
+strResultDate  测试集开始日期
+endResultDate  测试集结束日期
+stepTrainAndTest 训练集,测试集间隔天数
+trainSetLen 训练集长度
+windowLen  因子窗口长度
+outPath  结果输出目录
+filterParam:
+selectFilter 选择的filter类
+其他参数 filter初始化参数
+modelParam:
+selectModel 选择的model类
+其他参数 model初始化参数
+"""
 class Modeling():
     def __init__(self, param={}, data=None, Filter=None, Model=None):
         if type(param)==type("outPath"): # 可以直接输入模型输出位置生成Modeling
