@@ -75,7 +75,7 @@ class elaModel(Model):
     def train(self, Xi, Yi):
         from sklearn.linear_model import ElasticNet
         from sklearn.linear_model import LinearRegression
-        alpha = self.modelParam.get('alpha', 1e-4)
+        alpha = self.modelParam.get('alpha', 0)
         l1_ratio = self.modelParam.get("l1_ratio", 0.5)
         intercept = self.modelParam.get('intercept', False)
         # 模型训练
