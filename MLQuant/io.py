@@ -86,18 +86,18 @@ def loadDataFrame(
     if max_workers is None:
         max_workers = min(128, (os.cpu_count() or 4) + 4)
 
-    # 解析 date 范围
-    date_min, date_max = None, None
-    if date_range is not None:
-        if len(date_range) != 2:
-            raise ValueError("`date_range` must be a tuple of two integers (start, end).")
-        date_min, date_max = date_range
+    ## 解析 date 范围
+    #date_min, date_max = None, None
+    #if date_range is not None:
+    #    if len(date_range) != 2:
+    #        raise ValueError("`date_range` must be a tuple of two integers (start, end).")
+    #    date_min, date_max = date_range
 
     # 解析 curTime 范围
     time_min, time_max = None, None
     if curtime_range is not None:
-        if len(curtime_range) != 2:
-            raise ValueError("`curtime_range` must be a tuple of two integers (start, end).")
+        #if len(curtime_range) != 2:
+        #    raise ValueError("`curtime_range` must be a tuple of two integers (start, end).")
         time_min, time_max = curtime_range
 
     # 获取读取文件
