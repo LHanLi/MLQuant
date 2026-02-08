@@ -256,7 +256,7 @@ class Modeling():
         # 读取最新模型
         modelLoc = os.path.join(self.param["trainParam"]["outPath"], "model")
         modelLoc = os.path.join(modelLoc, os.listdir(modelLoc)[-1], f"{data['curTime'].min()}_{data['curTime'].max()}")
-        filter = self.restoreFilter(modelLoc) 
+        filter = self.restoreFilter(modelLoc)
         model = self.restoreModel(modelLoc)
         Xi, Yi, predictIndex = self.getTensor(data, filter.store["featureNames"], data["date"].unique()[0],\
             data["date"].unique()[self.param["trainParam"]["windowLen"]-1], data["date"].unique()[-1], False)
@@ -273,12 +273,12 @@ class Modeling():
             (data["date"]<=dateEnd)&data["legalData"]].index
         featureIndex = data[(data["date"]>=datePreStart)&\
             (data["date"]<=dateEnd)].index
-        # 预测目标值
-        if predict:
-            Yi = np.array(data.iloc[predictIndex]\
-                [self.param["trainParam"]["predictLabel"]]).reshape(-1, 1)
-        else:
-            Yi = None
+        ## 预测目标值
+        #if predict:
+        #    Yi = np.array(data.iloc[predictIndex]\
+        #        [self.param["trainParam"]["predictLabel"]]).reshape(-1, 1)
+        #else:
+        #    Yi = None
         # 特征数据图片 batch*seq*featureSize
         Xi_shift = data.iloc[featureIndex][["date", "curTime", "symbol"]+featureNames].set_index(\
             ['date', "curTime", 'symbol']) # 回看窗口为连续分钟,index去掉curTime则只取过去T个date
@@ -299,14 +299,18 @@ class Modeling():
                     Xi_loc.append(i)
                     j += 1
         Xi = Xi[Xi_loc]
+        Yi = None
         if not self.param["trainParam"]["tensor"]: # 如果关闭张量模式则转化为DataFrame
             Xi = pd.DataFrame(Xi.reshape(Xi.shape[0], -1))
             if predict:
-                Yi = pd.DataFrame(Yi.reshape(Yi.shape[0], -1))
+                Yi = data.iloc[predictIndex][self.param["trainParam"]["predictLabel"]]
+                #Yi = pd.DataFrame(Yi.reshape(Yi.shape[0], -1))
         else:
             import torch  # 张量模式默认torch
             Xi = torch.from_numpy(Xi).float()   
             if predict:
+                Yi = np.array(data.iloc[predictIndex]\
+                    [self.param["trainParam"]["predictLabel"]]).reshape(-1, 1)
                 Yi = torch.from_numpy(Yi).float()
         return Xi, Yi, predictIndex
     # log函数
