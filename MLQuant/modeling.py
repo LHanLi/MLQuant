@@ -161,7 +161,9 @@ class Modeling():
         self.log("train,模型训练完毕")
         df_train = self.data.iloc[predictIndex][["date", "curTime", "symbol", \
             self.param["trainParam"]["predictLabel"]]]
+        self.log("train predict")
         df_train["predict"] = model.predict(Xi)
+        self.log("train predict to dict")
         model.store["train"] = df_train.to_dict()
         self.log(model.log)
         model.saveModel(modelLoc)
@@ -186,7 +188,9 @@ class Modeling():
         self.log(f"test,得到测试数据{Xi_test.shape}")
         df_test = self.data.iloc[predictIndex_test][["date", "curTime", "symbol",\
             self.param["trainParam"]["predictLabel"]]]
+        self.log("test,predict")
         df_test["predict"] = model.predict(Xi_test) 
+        self.log("test,画图")
         from sklearn.metrics import mean_squared_error, r2_score
         # 日期IC
         ICdate_train = df_train.groupby("date")[["predict", self.param["trainParam"]["predictLabel"]]].corr().\
