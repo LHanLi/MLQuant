@@ -195,11 +195,11 @@ class Modeling():
             iloc[0::2, 1].reset_index(level=1, drop=True)
         from scipy.stats import pearsonr, spearmanr
         rmse_train = np.sqrt(mean_squared_error(df_train[self.param["trainParam"]["predictLabel"]], df_train["predict"]))
-        r2_train = r2_score(df_train[self.param["trainParam"]["predictLabel"]], df_train["predict"])
+        r2_train = 100*r2_score(df_train[self.param["trainParam"]["predictLabel"]], df_train["predict"])
         ic_train = 100*pearsonr(df_train[self.param["trainParam"]["predictLabel"]],\
                     df_train["predict"])[0] # 样本内
         rmse_test = np.sqrt(mean_squared_error(df_test[self.param["trainParam"]["predictLabel"]], df_test["predict"]))
-        r2_test = r2_score(df_test[self.param["trainParam"]["predictLabel"]], df_test["predict"])
+        r2_test = 100*r2_score(df_test[self.param["trainParam"]["predictLabel"]], df_test["predict"])
         ic_test = 100*pearsonr(df_test[self.param["trainParam"]["predictLabel"]],\
                     df_test["predict"])[0] # 样本外
         plt, fig, ax = MLQ.post.matplot(2, 2)
