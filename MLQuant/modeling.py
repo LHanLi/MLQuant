@@ -11,6 +11,7 @@ stepTrainAndTest 训练集,测试集间隔天数
 trainSetLen 训练集长度
 windowLen  因子窗口长度
 outPath  结果输出目录
+minimalStorage 是否精简存储
 filterParam:
 selectFilter 选择的filter类
 其他参数 filter初始化参数
@@ -213,7 +214,10 @@ class Modeling():
         ax[1][1].set_xlabel(f"从{df_test['date'].iloc[0]}到{df_test['date'].iloc[-1]}")
         plt.savefig(os.path.join(modelLoc, "predict.png"))
         self.log("test,保存模型及测试结果")
-        model.store["test"] = df_test.to_dict()
+        if self.param["trainParam"].get("minimalStorage", True):
+            model.store.pop("train")
+        else:
+            model.store["test"] = df_test.to_dict()
         MLQ.io.saveDataFrame(df_test[(df_test["date"]>=testStart)&(df_test["date"]<=testEnd)], os.path.join(self.param["trainParam"]["outPath"], "result"))
         model.saveModel(modelLoc)
         model.cleanup()
