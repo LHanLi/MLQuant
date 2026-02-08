@@ -41,14 +41,14 @@ def plotPredict(result, ISStartDate, ISEndDate, OOSStartDate, OOSEndDate, namey,
     datesicIS = df_IS[[namey, namey_pred, 'date']].groupby('date').\
                 corr().iloc[0::2, 1].reset_index(level=1, drop=True)
     rmseIS = np.sqrt(mean_squared_error(df_IS[namey], df_IS[namey_pred]))
-    r2IS = r2_score(df_IS[namey], df_IS[namey_pred])
+    r2IS = 100*r2_score(df_IS[namey], df_IS[namey_pred])
     icIS = 100*pearsonr(df_IS[namey], df_IS[namey_pred])[0] # 样本内
 
     df_OOS = result[(result["date"]>=int(OOSStartDate))&(result["date"]<int(OOSEndDate))]
     datesicOOS = df_OOS[[namey, namey_pred, 'date']].groupby('date').\
                 corr().iloc[0::2, 1].reset_index(level=1, drop=True)
     rmseOOS = np.sqrt(mean_squared_error(df_OOS[namey], df_OOS[namey_pred]))
-    r2OOS = r2_score(df_OOS[namey], df_OOS[namey_pred])
+    r2OOS = 100*r2_score(df_OOS[namey], df_OOS[namey_pred])
     icOOS = 100*pearsonr(df_OOS[namey], df_OOS[namey_pred])[0]  # 样本外
 
     plt, fig, ax = matplot(2, 2)
