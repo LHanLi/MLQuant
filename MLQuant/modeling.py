@@ -197,11 +197,11 @@ class Modeling():
         rmse_train = np.sqrt(mean_squared_error(df_train[self.param["trainParam"]["predictLabel"]], df_train["predict"]))
         r2_train = r2_score(df_train[self.param["trainParam"]["predictLabel"]], df_train["predict"])
         ic_train = 100*pearsonr(df_train[self.param["trainParam"]["predictLabel"]],\
-                    df_train["predict"]) # 样本内
+                    df_train["predict"])[0] # 样本内
         rmse_test = np.sqrt(mean_squared_error(df_test[self.param["trainParam"]["predictLabel"]], df_test["predict"]))
         r2_test = r2_score(df_test[self.param["trainParam"]["predictLabel"]], df_test["predict"])
         ic_test = 100*pearsonr(df_test[self.param["trainParam"]["predictLabel"]],\
-                    df_test["predict"]) # 样本外
+                    df_test["predict"])[0] # 样本外
         plt, fig, ax = MLQ.post.matplot(2, 2)
         ax[0][0].scatter(df_train[self.param["trainParam"]["predictLabel"]], df_train["predict"])
         ax[0][0].set_title(f"rmse:{rmse_train:.5f}, R2:{r2_train:.2f}, IC:{ic_train:.2f}")
