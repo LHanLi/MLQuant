@@ -36,19 +36,20 @@ def matplot(r=1, c=1, sharex=False, sharey=False, w=13, d=7, hspace=0.3, wspace=
 # 模型样本内外预测效果
 def plotPredict(result, ISStartDate, ISEndDate, OOSStartDate, OOSEndDate, namey, namey_pred): 
     from sklearn.metrics import mean_squared_error, r2_score
+    from scipy.stats import pearsonr, spearmanr
     df_IS = result[(result["date"]>=int(ISStartDate))&(result["date"]<int(ISEndDate))]
     datesicIS = df_IS[[namey, namey_pred, 'date']].groupby('date').\
                 corr().iloc[0::2, 1].reset_index(level=1, drop=True)
     rmseIS = np.sqrt(mean_squared_error(df_IS[namey], df_IS[namey_pred]))
     r2IS = r2_score(df_IS[namey], df_IS[namey_pred])
-    icIS = 100*np.sqrt(r2IS)  # 样本内
+    icIS = 100*pearsonr(df_IS[namey], df_IS[namey_pred])[0] # 样本内
 
     df_OOS = result[(result["date"]>=int(OOSStartDate))&(result["date"]<int(OOSEndDate))]
     datesicOOS = df_OOS[[namey, namey_pred, 'date']].groupby('date').\
                 corr().iloc[0::2, 1].reset_index(level=1, drop=True)
     rmseOOS = np.sqrt(mean_squared_error(df_OOS[namey], df_OOS[namey_pred]))
     r2OOS = r2_score(df_OOS[namey], df_OOS[namey_pred])
-    icOOS = 100*np.sqrt(r2_score(df_OOS[namey], df_OOS[namey_pred]))  # 样本外
+    icOOS = 100*pearsonr(df_OOS[namey], df_OOS[namey_pred])[0]  # 样本外
 
     plt, fig, ax = matplot(2, 2)
     # 样本内全截面
