@@ -324,7 +324,7 @@ class Filter:
     def __init__(self, featureParam):
         self.featureParam = featureParam #因子筛选所需的其他参数
         self.store = {}
-        self.log = "" # 保存实例log,输出到Modeling工作目录
+        self.log = "\n" # 保存实例log,输出到Modeling工作目录
     def saveFilter(self, modelDir): # 储存因子筛选器
         os.makedirs(modelDir, exist_ok=True)
         with open(os.path.join(modelDir,"filter_store.json"), 'w') as f:
@@ -344,7 +344,7 @@ class Model:
     def __init__(self, modelParam={}):
         self.modelParam = modelParam
         self.store = {}
-        self.log = "" # 保存实例log,输出到Modeling工作目录
+        self.log = "\n" # 保存实例log,输出到Modeling工作目录
     def saveModel(self, modelDir): # 储存模型
         os.makedirs(modelDir, exist_ok=True)
         with open(os.path.join(modelDir,"model_store.json"), 'w') as f:
