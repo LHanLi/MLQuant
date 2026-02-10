@@ -1,3 +1,4 @@
+from unittest import result
 import pandas as pd
 import numpy as np
 import MLQuant as MLQ
@@ -188,11 +189,17 @@ class Modeling():
             self.param["trainParam"]["predictLabel"]]]
         df_test["predict"] = model.predict(Xi_test) 
         from sklearn.metrics import mean_squared_error, r2_score
-        # 日期IC
-        ICdate_train = df_train.groupby("date")[["predict", self.param["trainParam"]["predictLabel"]]].corr().\
-            iloc[0::2, 1].reset_index(level=1, drop=True)
-        ICdate_test = df_test.groupby("date")[["predict", self.param["trainParam"]["predictLabel"]]].corr().\
-            iloc[0::2, 1].reset_index(level=1, drop=True)
+        # 日期IC,如果是单品种时序则改为计算预测误差
+        if len(df_train["symbol"].unique())!=1:
+            ICdate_train = df_train.groupby("date")[["predict", self.param["trainParam"]["predictLabel"]]].corr().\
+                iloc[0::2, 1].reset_index(level=1, drop=True)
+            ICdate_test = df_test.groupby("date")[["predict", self.param["trainParam"]["predictLabel"]]].corr().\
+                iloc[0::2, 1].reset_index(level=1, drop=True)
+        else:
+            ICdate_train = -(df_train.set_index("date")["predict"]-\
+                df_train.set_index("date")[self.param["trainParam"]["predictLabel"]]).abs()
+            ICdate_test = -(df_test.set_index("date")["predict"]-\
+                df_test.set_index("date")[self.param["trainParam"]["predictLabel"]]).abs()
         from scipy.stats import pearsonr, spearmanr
         rmse_train = np.sqrt(mean_squared_error(df_train[self.param["trainParam"]["predictLabel"]], df_train["predict"]))
         r2_train = 100*r2_score(df_train[self.param["trainParam"]["predictLabel"]], df_train["predict"])
@@ -229,12 +236,19 @@ class Modeling():
     def report(self):
         self.log("report,开始评价result")
         result = MLQ.io.loadDataFrame(os.path.join(self.param["trainParam"]["outPath"], "result")).sort_values(by=["date", "curTime", "symbol"])
-        ICdate = result.groupby("date")[[self.param["trainParam"]["predictLabel"], "predict"]].corr().iloc[0::2, 1].reset_index(level=1, drop=True)
         plt, fig, ax = MLQ.post.matplot()
-        ax.plot(ICdate.cumsum().values)
-        ax.set_title(f"IC:{100*ICdate.mean():.2f}, ICIR:{(ICdate.mean()/ICdate.std()):.2f}, "\
-                f"rollingICIR:{(ICdate.rolling(5).mean().mean()/ICdate.rolling(5).mean().std()):.2f}")
-        plt.savefig(os.path.join(self.param["trainParam"]["outPath"], "report", "IC.png"))
+        if len(result["symbol"].unique())!=1: # 截面策略展示累计IC
+            ICdate = result.groupby("date")[[self.param["trainParam"]["predictLabel"], "predict"]].corr().iloc[0::2, 1].reset_index(level=1, drop=True)
+            ax.plot(ICdate.cumsum().values)
+            ax.set_title(f"IC:{100*ICdate.mean():.2f}, ICIR:{(ICdate.mean()/ICdate.std()):.2f}, "\
+                    f"rollingICIR:{(ICdate.rolling(5).mean().mean()/ICdate.rolling(5).mean().std()):.2f}")
+            plt.savefig(os.path.join(self.param["trainParam"]["outPath"], "report", "IC.png"))
+        else: # 如果symbol只有1个,IC无意义,改为展示回测
+            r = result[self.param["trainParam"]["predictLabel"]]
+            ax.plot(r.cumsum().values)
+            ax.plot((np.sign(result["predict"])*r).cumsum().values, c="C3")     
+            ax.set_title(f"胜率:{100*(np.sign(result['predict'])==np.sign(r)).mean():.2f}%")
+            plt.savefig(os.path.join(self.param["trainParam"]["outPath"], "report", "backtest.png"))
     # 加载模型(包括特征筛选器)
     def restoreFilter(self, modelLoc):
         if self.Filter is None:
