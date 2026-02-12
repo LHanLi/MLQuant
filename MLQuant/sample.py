@@ -85,6 +85,7 @@ class elaModel(Model):
             model = ElasticNet(alpha=alpha, l1_ratio=l1_ratio, fit_intercept=intercept)
         self.model = model.fit(Xi, Yi)
         self.store['nonZeroRatio'] = (self.model.coef_!=0).mean()
+        self.store["coef"] = list(self.model.coef_)
     def predict(self, Xi):
         return self.model.predict(Xi)
 
