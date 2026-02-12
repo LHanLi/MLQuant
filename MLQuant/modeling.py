@@ -197,9 +197,9 @@ class Modeling():
                 iloc[0::2, 1].reset_index(level=1, drop=True)
         else:
             ICdate_train = (np.sign(df_train.set_index("date")["predict"])==\
-                np.sign(df_train.set_index("date")[self.param["trainParam"]["predictLabel"]])).astype("int")*2-1
+                np.sign(df_train.set_index("date")[self.param["trainParam"]["predictLabel"]])).astype("int")
             ICdate_test = (np.sign(df_test.set_index("date")["predict"])==\
-                np.sign(df_test.set_index("date")[self.param["trainParam"]["predictLabel"]])).astype("int")*2-1
+                np.sign(df_test.set_index("date")[self.param["trainParam"]["predictLabel"]])).astype("int")
         from scipy.stats import pearsonr, spearmanr
         rmse_train = np.sqrt(mean_squared_error(df_train[self.param["trainParam"]["predictLabel"]], df_train["predict"]))
         r2_train = 100*r2_score(df_train[self.param["trainParam"]["predictLabel"]], df_train["predict"])
