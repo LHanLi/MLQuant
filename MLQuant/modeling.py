@@ -318,7 +318,7 @@ class Modeling():
         if not self.param["trainParam"]["tensor"]: # 如果关闭张量模式则转化为DataFrame
             Xi = pd.DataFrame(Xi.reshape(Xi.shape[0], -1))
             if predict:
-                Yi = data.iloc[predictIndex][self.param["trainParam"]["predictLabel"]]
+                Yi = data.iloc[predictIndex][self.param["trainParam"]["predictLabel"]].reset_index(drop=True)
                 #Yi = pd.DataFrame(Yi.reshape(Yi.shape[0], -1))
         else:
             import torch  # 张量模式默认torch
