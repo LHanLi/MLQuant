@@ -508,7 +508,7 @@ class transformerModel(Model):
         val_loader = DataLoader(val_dataset, batch_size=batch_size, shuffle=False)
         # 实例化模型
         model = self.TransformerRegressor(
-            input_size=Xi.shape[2],
+            input_dim=Xi.shape[2],
             d_model=self.modelParam.get("d_model", 128),
             nhead=self.modelParam.get("nhead", 8),
             num_layers=self.modelParam.get("num_layers", 2),
