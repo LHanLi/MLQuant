@@ -246,9 +246,10 @@ class Modeling():
             plt.savefig(os.path.join(self.param["trainParam"]["outPath"], "report", "IC.png"))
         else: # 如果symbol只有1个,IC无意义,改为展示回测
             r = result[self.param["trainParam"]["predictLabel"]]
+            sr = (np.sign(result["predict"])*r)
             ax.plot(r.cumsum().values)
-            ax.plot((np.sign(result["predict"])*r).cumsum().values, c="C3")     
-            ax.set_title(f"胜率:{100*(np.sign(result['predict'])==np.sign(r)).mean():.2f}%")
+            ax.plot(sr.cumsum().values, c="C3")     
+            ax.set_title(f"收益:{sr.sum()},胜率:{100*(np.sign(result['predict'])==np.sign(r)).mean():.2f}%")
             ax.set_xlabel(f"从{result['date'].iloc[0]}到{result['date'].iloc[-1]}")
             plt.savefig(os.path.join(self.param["trainParam"]["outPath"], "report", "backtest.png"))
     # 加载模型(包括特征筛选器)
