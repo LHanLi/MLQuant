@@ -61,7 +61,7 @@ def saveDataFrame(df, output_root = "../data/raw", max_workers: int = None):
 def loadDataFrame(
     output_root: str = "../data/raw",
     date_range: tuple[int, int] | None = None,
-    curtime_range: tuple[int, int] | None = (0, 240000000),
+    curTime_range: tuple[int, int] | None = (0, 240000000),
     columns: list[str] | None = None,
     max_workers: int | None = None,
     fixed_filename: str | None = None  # 新增参数
@@ -75,7 +75,7 @@ def loadDataFrame(
     Parameters:
     - output_root (str): Parquet 文件根目录。
     - date_range (tuple[int, int] or None): (start_date, end_date)，包含端点。例如 (20231201, 20231205)
-    - curtime_range (tuple[int, int] or None): (start_time, end_time)，仅用于旧结构。
+    - curTime_range (tuple[int, int] or None): (start_time, end_time)，仅用于旧结构。
     - columns (list[str] or None): 要读取的列。
     - max_workers (int or None): 并发线程数，默认自动设置。
     - fixed_filename (str or None): 若提供，则尝试加载 {date}/{fixed_filename} 格式的文件。
@@ -99,15 +99,15 @@ def loadDataFrame(
 
     # 解析 curTime 范围（仅用于旧结构）
     time_min, time_max = None, None
-    if curtime_range is not None:
-        if len(curtime_range) != 2:
-            raise ValueError("`curtime_range` must be a tuple of two integers (start, end).")
-        time_min, time_max = curtime_range
+    if curTime_range is not None:
+        if len(curTime_range) != 2:
+            raise ValueError("`curTime_range` must be a tuple of two integers (start, end).")
+        time_min, time_max = curTime_range
 
     file_paths = []
 
     # === 格式1：新结构 {date}.pqt ===
-    if fixed_filename is None and curtime_range is None:
+    if fixed_filename is None and curTime_range is None:
         for pqt_file in output_path.glob("*.pqt"):
             try:
                 date_val = int(pqt_file.stem)
@@ -117,8 +117,8 @@ def loadDataFrame(
                 continue
             file_paths.append(str(pqt_file))
 
-    # 如果已找到新结构文件，且用户未要求 fixed_filename 或 curtime_range，则跳过其他格式
-    use_other_formats = not file_paths or fixed_filename is not None or curtime_range is not None
+    # 如果已找到新结构文件，且用户未要求 fixed_filename 或 curTime_range，则跳过其他格式
+    use_other_formats = not file_paths or fixed_filename is not None or curTime_range is not None
 
     if use_other_formats:
         # 遍历所有可能的日期目录
@@ -142,7 +142,7 @@ def loadDataFrame(
                     added_from_this_dir = True  # 标记已添加，避免重复加载
 
             # === 格式2：旧结构 {date}/{curTime}.pqt ===
-            if not added_from_this_dir and curtime_range is not None:
+            if not added_from_this_dir and curTime_range is not None:
                 for pqt_file in date_dir.glob("*.pqt"):
                     if fixed_filename and pqt_file.name == fixed_filename:
                         continue  # 避免重复（虽然 unlikely）
