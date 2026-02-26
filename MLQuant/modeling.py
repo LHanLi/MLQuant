@@ -196,10 +196,16 @@ class Modeling():
             ICdate_test = df_test.groupby("date")[["predict", self.param["trainParam"]["predictLabel"]]].corr().\
                 iloc[0::2, 1].reset_index(level=1, drop=True)
         else:
-            ICdate_train = (np.sign(df_train.set_index("date")["predict"])==\
-                np.sign(df_train.set_index("date")[self.param["trainParam"]["predictLabel"]])).astype("int")
-            ICdate_test = (np.sign(df_test.set_index("date")["predict"])==\
-                np.sign(df_test.set_index("date")[self.param["trainParam"]["predictLabel"]])).astype("int")
+            # 滚动IC
+            ICdate_train = df_train[["predict", self.param["trainParam"]["predictLabel"]]]\
+                .rolling(20).corr().iloc[0::2, 1]
+            ICdate_test = df_test[["predict", self.param["trainParam"]["predictLabel"]]]\
+                .rolling(20).corr().iloc[0::2, 1]
+            # 胜率
+            #ICdate_train = (np.sign(df_train.set_index("date")["predict"])==\
+            #    np.sign(df_train.set_index("date")[self.param["trainParam"]["predictLabel"]])).astype("int")
+            #ICdate_test = (np.sign(df_test.set_index("date")["predict"])==\
+            #    np.sign(df_test.set_index("date")[self.param["trainParam"]["predictLabel"]])).astype("int")
         from scipy.stats import pearsonr, spearmanr
         rmse_train = np.sqrt(mean_squared_error(df_train[self.param["trainParam"]["predictLabel"]], df_train["predict"]))
         r2_train = 100*r2_score(df_train[self.param["trainParam"]["predictLabel"]], df_train["predict"])
@@ -239,19 +245,33 @@ class Modeling():
         plt, fig, ax = MLQ.post.matplot()
         if len(result["symbol"].unique())!=1: # 截面策略展示累计IC
             ICdate = result.groupby("date")[[self.param["trainParam"]["predictLabel"], "predict"]].corr().iloc[0::2, 1].reset_index(level=1, drop=True)
-            ax.plot(ICdate.cumsum().values)
-            ax.set_title(f"IC:{100*ICdate.mean():.2f}, ICIR:{(ICdate.mean()/ICdate.std()):.2f}, "\
-                    f"rollingICIR:{(ICdate.rolling(5).mean().mean()/ICdate.rolling(5).mean().std()):.2f}")
-            ax.set_xlabel(f"从{result['date'].iloc[0]}到{result['date'].iloc[-1]}")
-            plt.savefig(os.path.join(self.param["trainParam"]["outPath"], "report", "IC.png"))
-        else: # 如果symbol只有1个,IC无意义,改为展示回测
-            r = result[self.param["trainParam"]["predictLabel"]]
-            sr = (np.sign(result["predict"])*r)
-            ax.plot(r.cumsum().values)
-            ax.plot(sr.cumsum().values, c="C3")     
-            ax.set_title(f"收益:{sr.sum()},胜率:{100*(np.sign(result['predict'])==np.sign(r)).mean():.2f}%")
-            ax.set_xlabel(f"从{result['date'].iloc[0]}到{result['date'].iloc[-1]}")
-            plt.savefig(os.path.join(self.param["trainParam"]["outPath"], "report", "backtest.png"))
+        else: 
+            # 单品种模型展示滚动IC
+            ICdate = result[[self.param["trainParam"]["predictLabel"], "predict"]].rolling(20).corr().iloc[0::2, 1]        
+        ax.plot(ICdate.cumsum().values)
+        ax.set_title(f"IC:{100*ICdate.mean():.2f}, ICIR:{(ICdate.mean()/ICdate.std()):.2f}, "\
+                f"rollingICIR:{(ICdate.rolling(5).mean().mean()/ICdate.rolling(5).mean().std()):.2f}")
+        ax.set_xlabel(f"从{result['date'].iloc[0]}到{result['date'].iloc[-1]}")
+        plt.savefig(os.path.join(self.param["trainParam"]["outPath"], "report", "IC.png"))
+        #else: 
+        #    # 单品种模型展示滚动IC
+        #    cut = result[["predict", self.param["trainParam"]["predictLabel"]]]
+        #    r = cut.rolling(20).corr().iloc[0::2, 1] 
+        #    n = r.cumsum()
+        #    bias = abs(n-np.linspace(n.iloc[0], n.iloc[-1], len(r))).mean()/\
+        #            (r.std()*np.sqrt(len(r))) # 时间序列长度波动率归一化的偏离值
+        #    ax.plot(r.cumsum().values)
+        #    ax.set_title(f"IC={100*cut.corr().iloc[0, :].iloc[1]:.1f}, "+
+        #        f"mean rollingIC={100*r.mean():.1f}, 偏离值={bias:.1f}") 
+        #    plt.savefig(os.path.join(self.param["trainParam"]["outPath"], "report", "predict.png"))
+        #    ## 如果symbol只有1个,IC无意义,改为展示回测
+        #    #r = result[self.param["trainParam"]["predictLabel"]]
+        #    #sr = (np.sign(result["predict"])*r)
+        #    #ax.plot(r.cumsum().values)
+        #    #ax.plot(sr.cumsum().values, c="C3")     
+        #    #ax.set_title(f"收益:{sr.sum()},胜率:{100*(np.sign(result['predict'])==np.sign(r)).mean():.2f}%")
+        #    #ax.set_xlabel(f"从{result['date'].iloc[0]}到{result['date'].iloc[-1]}")
+        #    #plt.savefig(os.path.join(self.param["trainParam"]["outPath"], "report", "backtest.png"))
     # 加载模型(包括特征筛选器)
     def restoreFilter(self, modelLoc):
         if self.Filter is None:
