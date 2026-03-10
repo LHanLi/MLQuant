@@ -29,7 +29,7 @@ class Modeling():
             self.param = param
         if self.param["trainParam"]["predictLabel"]=="predict":
             raise ValueError("预测值名称不合法")
-        self.data = data
+        self.data = data.reset_index(drop=True) if data is not None else None
         self.Filter = Filter
         self.Model = Model 
         self.dataFinished = []
@@ -196,16 +196,16 @@ class Modeling():
             ICdate_test = df_test.groupby("date")[["predict", self.param["trainParam"]["predictLabel"]]].corr().\
                 iloc[0::2, 1].reset_index(level=1, drop=True)
         else:
-            # 滚动IC
-            ICdate_train = df_train[["predict", self.param["trainParam"]["predictLabel"]]]\
-                .rolling(20).corr().iloc[0::2, 1]
-            ICdate_test = df_test[["predict", self.param["trainParam"]["predictLabel"]]]\
-                .rolling(20).corr().iloc[0::2, 1]
-            # 胜率
-            #ICdate_train = (np.sign(df_train.set_index("date")["predict"])==\
-            #    np.sign(df_train.set_index("date")[self.param["trainParam"]["predictLabel"]])).astype("int")
-            #ICdate_test = (np.sign(df_test.set_index("date")["predict"])==\
-            #    np.sign(df_test.set_index("date")[self.param["trainParam"]["predictLabel"]])).astype("int")
+            ## 滚动IC
+            #ICdate_train = df_train[["predict", self.param["trainParam"]["predictLabel"]]]\
+            #    .rolling(20).corr().iloc[0::2, 1]
+            #ICdate_test = df_test[["predict", self.param["trainParam"]["predictLabel"]]]\
+            #    .rolling(20).corr().iloc[0::2, 1]
+            # 策略收益(小于0空，大于0多)
+            ICdate_train = (np.sign(df_train.set_index("date")["predict"])*\
+                df_train.set_index("date")[self.param["trainParam"]["predictLabel"]])
+            ICdate_test = (np.sign(df_test.set_index("date")["predict"])*\
+                df_test.set_index("date")[self.param["trainParam"]["predictLabel"]])
         from scipy.stats import pearsonr, spearmanr
         rmse_train = np.sqrt(mean_squared_error(df_train[self.param["trainParam"]["predictLabel"]], df_train["predict"]))
         r2_train = 100*r2_score(df_train[self.param["trainParam"]["predictLabel"]], df_train["predict"])
@@ -246,8 +246,9 @@ class Modeling():
         if len(result["symbol"].unique())!=1: # 截面策略展示累计IC
             ICdate = result.groupby("date")[[self.param["trainParam"]["predictLabel"], "predict"]].corr().iloc[0::2, 1].reset_index(level=1, drop=True)
         else: 
-            # 单品种模型展示滚动IC
-            ICdate = result[[self.param["trainParam"]["predictLabel"], "predict"]].rolling(20).corr().iloc[0::2, 1]        
+            # 单品种模型展示多空收益
+            #ICdate = result[[self.param["trainParam"]["predictLabel"], "predict"]].rolling(20).corr().iloc[0::2, 1]        
+            ICdate = np.sign(result[self.param["trainParam"]["predictLabel"]])*result["predict"]        
         ax.plot(ICdate.cumsum().values)
         ax.set_title(f"IC:{100*ICdate.mean():.2f}, ICIR:{(ICdate.mean()/ICdate.std()):.2f}, "\
                 f"rollingICIR:{(ICdate.rolling(5).mean().mean()/ICdate.rolling(5).mean().std()):.2f}")
