@@ -200,7 +200,8 @@ class Post():
         self.result = copy.copy(result)
         self.result["date"] = pd.to_datetime(self.result["date"].astype("string"))
         # 计算IC和benchmark
-        self.sectionsCorr = self.result[["date", "curTime", "predict", "Nbr240"]].groupby(['date', 'curTime']).corr().loc[:, "predict"].loc[:, :, "Nbr240"]
+        self.sectionsCorr = self.result[["date", "curTime", "predict", "Nbr240"]].groupby(\
+            ['date', 'curTime']).corr().loc[:, "predict"].loc[:, :, "Nbr240"]
         #benchmark = (result.groupby(["date", "curTime"])["Nbr240"].mean()+1).groupby("date").prod()-1 # 一天所有截面
         # 每日净值
         self.dailyAlpha = copy.copy(dailyAlpha)
