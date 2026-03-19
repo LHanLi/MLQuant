@@ -178,6 +178,9 @@ class Modeling():
         self.log(f"test,开始读取第{processNumber+1}个滑动窗口已训练模型")
         # 读取该滑动窗口对应的特征筛选器及模型
         modelLoc = os.path.join(self.param["trainParam"]["outPath"], "model", f"{testStart}_startTest", f"{self.data['curTime'].min()}_{self.data['curTime'].max()}")
+        if "predict.png" in os.listdir(modelLoc):
+            self.log(f"test,第{processNumber+1}滚动窗口test已完成,跳过")
+            return
         filter = self.restoreFilter(modelLoc)
         model = self.restoreModel(modelLoc)
         df_train = pd.DataFrame(model.store["train"])
