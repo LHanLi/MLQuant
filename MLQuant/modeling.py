@@ -131,7 +131,7 @@ class Modeling():
         # 创建该滑动窗口模型存储文件夹
         modelLoc = os.path.join(self.param["trainParam"]["outPath"], "model", f"{testStart}_startTest", f"{self.data['curTime'].min()}_{self.data['curTime'].max()}")
         os.makedirs(modelLoc, exist_ok=True)
-        if "model.pkl" in os.listdir(modelLoc):
+        if "model.pkl" in os.listdir(modelLoc) and (processNumber+1)!=len(self.rollingWindow): # 最后一个窗口需要重新训练
             self.log(f"train,第{processNumber+1}滚动窗口train已完成,跳过")
             return
         self.log("train,实例化Filter获取featureNames")
@@ -178,7 +178,7 @@ class Modeling():
         self.log(f"test,开始读取第{processNumber+1}个滑动窗口已训练模型")
         # 读取该滑动窗口对应的特征筛选器及模型
         modelLoc = os.path.join(self.param["trainParam"]["outPath"], "model", f"{testStart}_startTest", f"{self.data['curTime'].min()}_{self.data['curTime'].max()}")
-        if "predict.png" in os.listdir(modelLoc):
+        if "predict.png" in os.listdir(modelLoc) and (processNumber+1)!=len(self.rollingWindow): # 最后一个窗口需要重新测试
             self.log(f"test,第{processNumber+1}滚动窗口test已完成,跳过")
             return
         filter = self.restoreFilter(modelLoc)
